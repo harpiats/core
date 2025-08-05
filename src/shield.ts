@@ -125,7 +125,7 @@ export class Shield {
 	}
 
 	public middleware() {
-		return (req: Request, res: Response, next: () => void) => {
+		return (_req: Request, res: Response, next: () => void) => {
 			this.applyHeaders(res);
 			next();
 		};

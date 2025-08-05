@@ -107,7 +107,7 @@ describe("Cors", () => {
 
   it("should not allow origin when origin is a function and it calls back without an origin", () => {
     cors.options = {
-      origin: (reqOrigin: string, callback: (err: Error | undefined, resultOrigin: string | undefined) => void) => {
+      origin: (_reqOrigin: string, callback: (err: Error | undefined, resultOrigin: string | undefined) => void) => {
         callback(undefined, undefined);
       },
     };
@@ -120,7 +120,7 @@ describe("Cors", () => {
 
   it("should handle error when origin is a function and it calls back with an error", () => {
     cors.options = {
-      origin: (reqOrigin: string, callback: (err: Error | undefined, resultOrigin: string | undefined) => void) => {
+      origin: (_reqOrigin: string, callback: (err: Error | undefined, resultOrigin: string | undefined) => void) => {
         callback(new Error("Test Error"), undefined);
       },
     };
