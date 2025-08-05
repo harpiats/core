@@ -178,7 +178,7 @@ export class RequestMonitor {
 
       // Save updated metrics to the store
       await this.saveMetrics(monitor);
-    } catch (error) {
+    } catch (_error) {
       const dateKey = new Date().toISOString().split("T")[0];
 
       // Tenta recuperar métricas para atualizar o contador de erros

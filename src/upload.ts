@@ -42,7 +42,7 @@ export class Upload {
 
     try {
       await this.saveFile(path.join(process.cwd(), this.path, fileName), file);
-    } catch (error) {
+    } catch (_error) {
       return res.status(500).json({ message: "Internal server error" });
     }
 
@@ -74,7 +74,7 @@ export class Upload {
 
         try {
           await this.saveFile(filePath, file);
-        } catch (error) {
+        } catch (_error) {
           return res.status(500).json({ message: "Internal server error" });
         }
 

@@ -86,7 +86,7 @@ export class TemplateEngine implements Engine {
       finalContent = this.removeComments(finalContent);
 
       return finalContent;
-    } catch (error) {
+    } catch (_) {
       throw new Error("Error rendering template.");
     }
   }
@@ -157,7 +157,7 @@ export class TemplateEngine implements Engine {
   private async readFile(filePath: string): Promise<string> {
     try {
       return await readFile(filePath, "utf-8");
-    } catch (error) {
+    } catch (_) {
       throw new Error("Error reading file.");
     }
   }
@@ -174,7 +174,7 @@ export class TemplateEngine implements Engine {
 
     const remainingContent = content.replace(blockRegex, (_, blockName, blockContent) => {
       // if (blockContent.length > 10000) {
-      // 	throw new Error("Conteúdo do bloco muito grande");
+      // 	throw new Error("Block content too large");
       // }
 
       blocks[blockName] = blockContent;
@@ -230,15 +230,20 @@ export class TemplateEngine implements Engine {
 
   private processOperations(content: string, data: Data): string {
     content = this.extractVariables(content, data);
-    content = this.processConditionals(content, data);
     content = this.processLoops(content, data);
+    content = this.processConditionals(content, data);
 
     return content;
   }
 
   private extractVariables(content: string, data: Data): string {
     return content.replace(/{{~\s*var\s+(\w+)\s*=\s*(.+?)\s*}}/g, (_, varName, value) => {
-      data[varName] = this.evaluateExpression(value, data);
+      try {
+        data[varName] = this.evaluateExpression(value, data);
+      } catch (error) {
+        console.error(`Error evaluating expression: ${value}`, error);
+        data[varName] = "";
+      }
       return "";
     });
   }
@@ -246,8 +251,16 @@ export class TemplateEngine implements Engine {
   private processConditionals(content: string, data: Data): string {
     return content.replace(
       /{{~\s*if\s*\((.+?)\)\s*}}\s*([\s\S]*?)\s*({{~\s*else\s*}}\s*([\s\S]*?)\s*)?{{~\s*endif\s*}}/g,
-      (_, condition, ifBlock, elseBlock, elseContent) => {
-        return this.evaluateExpression(condition, data) ? ifBlock : elseContent || "";
+      (_, condition, ifBlock, _elseBlock, elseContent) => {
+        // Try to resolve as plugin
+        const pluginResult = this.callPlugin(condition, data);
+        if (pluginResult !== undefined && pluginResult !== null) {
+          return pluginResult ? ifBlock : elseContent || "";
+        }
+
+        // If not plugin, evaluates as normal expression
+        const conditionResult = this.evaluateExpression(condition, data);
+        return conditionResult ? ifBlock : elseContent || "";
       },
     );
   }
@@ -256,19 +269,27 @@ export class TemplateEngine implements Engine {
     return content.replace(
       /{{~\s*for\s+(?:\[(\w+),\s*(\w+)\]|(\w+))\s+in\s+(.+?)\s*}}([\s\S]*?){{~\s*endfor\s*}}/g,
       (_, keyName, valueName, itemName, listName, blockContent) => {
-        const list = this.resolveVariable(listName, data) || [];
-
+        const list = this.evaluateExpression(listName, data) || [];
         if (keyName && valueName) {
           return Object.entries(list)
             .map(([key, value]) =>
-              this.interpolateVariables(blockContent, { ...data, [keyName]: key, [valueName]: value }),
+              this.processBlockContent(blockContent, { ...data, [keyName]: key, [valueName]: value }),
             )
             .join("");
         }
-
-        return list.map((item: any) => this.interpolateVariables(blockContent, { ...data, [itemName]: item })).join("");
+        return list.map((item: any) => this.processBlockContent(blockContent, { ...data, [itemName]: item })).join("");
       },
     );
+  }
+
+  private processBlockContent(content: string, data: Data): string {
+    let processedContent = content;
+
+    processedContent = this.extractVariables(processedContent, data);
+    processedContent = this.processConditionals(processedContent, data);
+    processedContent = this.interpolateVariables(processedContent, data);
+
+    return processedContent;
   }
 
   private interpolateVariables(content: string, data: Data): string {
@@ -316,42 +337,153 @@ export class TemplateEngine implements Engine {
   }
 
   private evaluateExpression(expression: string, data: Data): any {
+    // Check if expression is a plugin call
+    const pluginMatch = expression.match(/^(\w+)\(/);
+    if (pluginMatch) {
+      const pluginName = pluginMatch[1];
+      if (!this.plugins[pluginName]) {
+        return null;
+      }
+
+      try {
+        const pluginResult = this.callPlugin(expression, data);
+        if (pluginResult !== undefined && pluginResult !== null) {
+          return pluginResult;
+        }
+      } catch (error: any) {
+        console.warn(`Plugin ${pluginName} execution warning:`, error.message);
+        return null;
+      }
+    }
+
+    // Fallback to JavaScript evaluation
     try {
-      return new Function(...Object.keys(data), `return ${expression};`)(...Object.values(data));
-    } catch {
+      const func = new Function(...Object.keys(data), `return ${expression};`);
+      return func(...Object.values(data));
+    } catch (error: any) {
+      console.warn(`Expression evaluation warning: ${error.message}`);
       return null;
     }
   }
 
   private callPlugin(expression: string, data: Data): string | null {
-    const match = expression.match(/^(\w+)\((.*?)\)$/);
+    const match = expression.match(/^(\w+)\((.*)\)$/);
     if (!match) return null;
 
     const [_, pluginName, argsString] = match;
-
-    // Process arguments recursively
-    const args = argsString.split(",").map((arg) => {
-      arg = arg.trim();
-
-      // Check if the argument is another plugin call (e.g., "singularize(name)")
-      if (arg.match(/^\w+\(.*\)$/)) {
-        return this.callPlugin(arg, data); // Recursively process nested plugin calls
-      }
-
-      // Check if the argument is a variable (e.g., "name")
-      const variableValue = this.resolveVariable(arg, data);
-      if (variableValue !== undefined && variableValue !== null) {
-        return variableValue;
-      }
-
-      return arg;
-    });
+    const args = this.parseArguments(argsString, data);
 
     if (this.plugins[pluginName]) {
-      return this.plugins[pluginName](...args);
+      try {
+        return this.plugins[pluginName](...args);
+      } catch (error) {
+        console.error(`Error calling plugin ${pluginName}:`, error);
+        return null;
+      }
     }
 
     return null;
+  }
+
+  private parseArguments(argsString: string, data: Data): any[] {
+    const args: any[] = [];
+    let currentArg = "";
+    let depth = 0; // Tracks () nesting
+    let arrayDepth = 0; // Tracks [] nesting
+    let objectDepth = 0; // Tracks {} nesting
+    let inString = false;
+    let stringChar = "";
+
+    for (let i = 0; i < argsString.length; i++) {
+      const char = argsString[i];
+
+      // Handle string literals (including escaped quotes)
+      if (inString) {
+        currentArg += char;
+        if (char === stringChar && (i === 0 || argsString[i - 1] !== "\\")) {
+          inString = false;
+        }
+        continue;
+      }
+
+      // Detect string start
+      if (char === '"' || char === "'") {
+        inString = true;
+        stringChar = char;
+        currentArg += char;
+        continue;
+      }
+
+      // Update nesting levels
+      if (char === "(") depth++;
+      if (char === ")") depth--;
+      if (char === "[") arrayDepth++;
+      if (char === "]") arrayDepth--;
+      if (char === "{") objectDepth++;
+      if (char === "}") objectDepth--;
+
+      // Only treat comma as separator at root level
+      if (char === "," && depth === 0 && arrayDepth === 0 && objectDepth === 0) {
+        args.push(this.processArgument(currentArg.trim(), data));
+        currentArg = "";
+        continue;
+      }
+
+      currentArg += char;
+    }
+
+    // Relaxed validation for conditional expressions
+    const isConditionalExpression = argsString.includes(")") && !argsString.trim().endsWith(")") && depth > 0;
+
+    if ((!isConditionalExpression && depth !== 0) || arrayDepth !== 0 || objectDepth !== 0) {
+      throw new Error("Malformed arguments: Unbalanced brackets/braces/parentheses");
+    }
+
+    // Add final argument
+    if (currentArg.trim()) {
+      args.push(this.processArgument(currentArg.trim(), data));
+    }
+
+    return args;
+  }
+
+  private processArgument(arg: string, data: Data): any {
+    // Handle string literals (including escaped characters)
+    if ((arg.startsWith("'") && arg.endsWith("'")) || (arg.startsWith('"') && arg.endsWith('"'))) {
+      return arg.slice(1, -1).replace(/\\(.)/g, "$1");
+    }
+
+    // Handle numbers (more precise validation)
+    if (/^-?\d+\.?\d*$/.test(arg.trim())) {
+      return Number(arg);
+    }
+
+    // Handle booleans
+    if (arg === "true") return true;
+    if (arg === "false") return false;
+
+    // Handle JSON arrays and objects
+    if ((arg.startsWith("[") && arg.endsWith("]")) || (arg.startsWith("{") && arg.endsWith("}"))) {
+      try {
+        return JSON.parse(arg);
+      } catch {
+        return arg; // Fallback to string if invalid JSON
+      }
+    }
+
+    // Check for variables in data context
+    const variableValue = this.resolveVariable(arg, data);
+    if (variableValue !== undefined) {
+      return variableValue;
+    }
+
+    // Handle plugin calls (improved regex)
+    if (/^[a-zA-Z_]\w*\s*\([\s\S]*\)$/.test(arg)) {
+      return this.callPlugin(arg, data);
+    }
+
+    // Default string return
+    return arg;
   }
 
   private removeComments(content: string): string {
