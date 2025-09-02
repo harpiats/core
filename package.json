@@ -3,7 +3,7 @@
   "module": "index.ts",
   "type": "module",
   "bin": "./index.ts",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "version": "1.0.0-beta.10",
   "scripts": {
     "commit": "cz",
@@ -27,10 +27,11 @@
     "web",
     "api",
     "harpia dev",
-    "harpiats"
+    "harpiats",
+    "harpia framework"
   ],
   "devDependencies": {
-    "@biomejs/biome": "2.1.3",
+    "@biomejs/biome": "2.2.2",
     "@commitlint/cli": "^19.8.1",
     "@commitlint/config-conventional": "^19.8.1",
     "@types/bun": "latest",
