@@ -4,7 +4,7 @@
   "type": "module",
   "bin": "./index.ts",
   "license": "Apache-2.0",
-  "version": "1.0.0-beta.11",
+  "version": "1.0.0-beta.12",
   "scripts": {
     "commit": "cz",
     "tests": "bun cmd.ts tests",
@@ -31,15 +31,15 @@
     "harpia framework"
   ],
   "devDependencies": {
-    "@biomejs/biome": "2.2.2",
-    "@commitlint/cli": "^19.8.1",
-    "@commitlint/config-conventional": "^19.8.1",
-    "@types/bun": "latest",
+    "@biomejs/biome": "2.2.5",
+    "@commitlint/cli": "^20.1.0",
+    "@commitlint/config-conventional": "^20.0.0",
+    "@types/bun": "1.2.23",
     "commitizen": "^4.3.1",
     "cz-conventional-changelog": "^3.3.0"
   },
   "peerDependencies": {
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.3"
   },
   "exports": {
     ".": "./index.ts",
