@@ -1,9 +1,11 @@
 import path from "node:path";
+
 import { Cors } from "./cors";
 import { Middleware } from "./middlewares";
 import { Request } from "./request";
 import { Response } from "./response";
 import { Router } from "./router";
+import { WebSocket } from "./websocket";
 
 import type { Server } from "bun";
 import type { FetchRequest } from "./request";
@@ -14,7 +16,7 @@ import type { Handler, HandlerResult } from "./types/handler";
 import type { NotFoundTypes } from "./types/not-found";
 import type { MethodOptions } from "./types/router";
 import type { ServerOptions } from "./types/server";
-import { WebSocket, type WebSocketHandlers } from "./websocket";
+import type { WebSocketHandlers } from "./types/websocket";
 
 export class Application {
   private static instance: Application | null = null;
@@ -72,10 +74,12 @@ export class Application {
       throw new Error("'tls' cannot be used with 'unix'. TLS is only applicable to TCP connections.");
     }
 
+    this.websocket.register(this.router.wsList());
+
     const commonConfig = {
       development: options.development,
       maxRequestBodySize: options.maxRequestBodySize,
-      websocket: this.websocket.all(),
+      websocket: this.websocket.getHandlers(),
       fetch: this.handleRequest.bind(this),
     };
 
@@ -99,8 +103,8 @@ export class Application {
     }
   }
 
-  public ws<DataType = any>(path: string, handlers: WebSocketHandlers<DataType>): void {
-    this.websocket.register(path, handlers as WebSocketHandlers<unknown>);
+  public ws<DataType = any>(path: string, controller: WebSocketHandlers<DataType>): void {
+    this.websocket.ws(path, controller as WebSocketHandlers<unknown>);
   }
 
   public stop(): void {
@@ -126,7 +130,7 @@ export class Application {
   }
 
   public routes(routes: Router): void {
-    this.router.register({ routes: routes.list() });
+    this.router.register({ routes: routes.list(), wsRoutes: routes.wsList(), prefix: routes.getPrefix() });
   }
 
   public use(app: Application | string | Handler, handler?: Handler): void {

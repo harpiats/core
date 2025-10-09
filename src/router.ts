@@ -1,16 +1,21 @@
+import { WebSocket } from "./websocket";
+
 import type { Handler } from "./types/handler";
-import type { RouteInterface } from "./types/router";
+import type { RouteInterface, RouterRegisterTypes } from "./types/router";
+import type { WebSocketHandlers, WebSocketInterface } from "./types/websocket";
 
 export class Router {
   private routes: RouteInterface[];
   private prefix: string;
+  private websocket: WebSocket;
 
   constructor(prefix?: string) {
     this.routes = [];
     this.prefix = prefix ? this.formatPrefix(prefix) : "";
+    this.websocket = new WebSocket();
   }
 
-  public register({ routes, prefix }: { routes: RouteInterface[]; prefix?: string }): void {
+  public register({ routes, wsRoutes, prefix }: RouterRegisterTypes): void {
     let routesWithPrefix: RouteInterface[] = routes;
 
     if (prefix) {
@@ -20,11 +25,28 @@ export class Router {
       });
     }
 
+    if (wsRoutes) {
+      let websocketWithPrefix: WebSocketInterface[] = wsRoutes;
+
+      if (prefix) {
+        websocketWithPrefix = wsRoutes.map((route) => {
+          route.path = `${prefix}${route.path}`;
+          return route;
+        });
+      }
+
+      this.websocket.register(websocketWithPrefix);
+    }
+
     this.routes.push(...routesWithPrefix);
   }
 
   public list(): RouteInterface[] {
     return this.routes;
+  }
+
+  public wsList(): WebSocketInterface[] {
+    return this.websocket.list();
   }
 
   public getPrefix(): string {
@@ -113,6 +135,10 @@ export class Router {
     this.routes.push({ method: "HEAD", path, handlers, controller });
 
     return this;
+  }
+
+  public ws<DataType = any>(path: string, controller: WebSocketHandlers<DataType>): void {
+    this.websocket.ws(path, controller as WebSocketHandlers<unknown>);
   }
 
   public isRouteMatching(url: string, method: string): RouteInterface | null {

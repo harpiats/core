@@ -1,24 +1,9 @@
 import type { ServerWebSocket } from "bun";
 import type { WebSocketOptions } from "./types/server";
-
-export type WebSocketData<T = {}> = T;
-type InternalWebSocketData<T> = { url: string } & WebSocketData<T>;
-
-export type WebSocketHandlers<T = {}> = {
-  open?: (ws: ServerWebSocket<InternalWebSocketData<T>>) => void | Promise<void>;
-  message?: (ws: ServerWebSocket<InternalWebSocketData<T>>, message: string | Buffer) => void | Promise<void>;
-  close?: (ws: ServerWebSocket<InternalWebSocketData<T>>, code: number, reason: string) => void | Promise<void>;
-  drain?: (ws: ServerWebSocket<InternalWebSocketData<T>>) => void | Promise<void>;
-  error?: (ws: ServerWebSocket<InternalWebSocketData<T>>, error: Error) => void | Promise<void>;
-};
-
-export type WebSocketRoutes<T = any> = {
-  path: string;
-  handler: WebSocketHandlers<T>;
-};
+import type { InternalWebSocketData, WebSocketHandlers, WebSocketInterface } from "./types/websocket";
 
 export class WebSocket<T = any> {
-  private routes: WebSocketRoutes<T>[];
+  private routes: WebSocketInterface<T>[];
   private connections: Set<ServerWebSocket<InternalWebSocketData<T>>>;
 
   constructor() {
@@ -26,19 +11,25 @@ export class WebSocket<T = any> {
     this.connections = new Set();
   }
 
-  public register(path: string, handler: WebSocketHandlers<T>): void {
-    this.routes.push({ path, handler });
+  public ws(path: string, handlers: WebSocketHandlers<T>): void {
+    this.routes.push({ path, handlers });
   }
 
-  public list(): WebSocketRoutes[] {
+  public register(websockets: WebSocketInterface[]) {
+    for (const route of websockets) {
+      this.ws(route.path, route.handlers);
+    }
+  }
+
+  public list(): WebSocketInterface[] {
     return this.routes;
   }
 
-  public get(path: string): WebSocketRoutes | undefined {
+  public get(path: string): WebSocketInterface | undefined {
     return this.routes.find((route) => route.path === path);
   }
 
-  public isRouteMatching(url: string): WebSocketRoutes | null {
+  public isRouteMatching(url: string): WebSocketInterface | null {
     const urlSegments = url.split("/").filter(Boolean);
 
     for (const route of this.routes) {
@@ -60,14 +51,14 @@ export class WebSocket<T = any> {
     return null;
   }
 
-  public all(): WebSocketOptions<InternalWebSocketData<T>> {
+  public getHandlers(): WebSocketOptions<InternalWebSocketData<T>> {
     return {
       message: (ws, message) => {
         const pathname = new URL(ws.data.url).pathname;
         const route = this.isRouteMatching(pathname);
 
-        if (route?.handler.message) {
-          route.handler.message(ws, message);
+        if (route?.handlers.message) {
+          route.handlers.message(ws, message);
 
           for (const connection of this.connections) {
             if (connection !== ws && connection.readyState === 1) {
@@ -80,9 +71,9 @@ export class WebSocket<T = any> {
         const pathname = new URL(ws.data.url).pathname;
         const route = this.isRouteMatching(pathname);
 
-        if (route?.handler.open) {
+        if (route?.handlers.open) {
           this.connections.add(ws);
-          route.handler.open(ws);
+          route.handlers.open(ws);
         } else {
           ws.close(1003, "Route not allowed");
         }
@@ -91,25 +82,25 @@ export class WebSocket<T = any> {
         const pathname = new URL(ws.data.url).pathname;
         const route = this.isRouteMatching(pathname);
 
-        if (route?.handler.close) {
+        if (route?.handlers.close) {
           this.connections.delete(ws);
-          route.handler.close(ws, code, message);
+          route.handlers.close(ws, code, message);
         }
       },
       drain: (ws) => {
         const pathname = new URL(ws.data.url).pathname;
         const route = this.isRouteMatching(pathname);
 
-        if (route?.handler.drain) {
-          route.handler.drain(ws);
+        if (route?.handlers.drain) {
+          route.handlers.drain(ws);
         }
       },
       error: (ws, error) => {
         const pathname = new URL(ws.data.url).pathname;
         const route = this.isRouteMatching(pathname);
 
-        if (route?.handler.error) {
-          route.handler.error(ws, error);
+        if (route?.handlers.error) {
+          route.handlers.error(ws, error);
         }
       },
     };

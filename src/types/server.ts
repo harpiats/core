@@ -8,7 +8,7 @@ export type ServerOptions = {
   unix?: string;
   reusePort?: boolean;
   maxRequestBodySize?: number;
-  ws?: Partial<WebSocketOptions<WebSocketData>>;
+  // ws?: Partial<WebSocketOptions<WebSocketData>>;
 };
 
 export type TLSOptions = {
