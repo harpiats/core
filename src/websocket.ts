@@ -71,19 +71,23 @@ export class WebSocket<T = any> {
         const pathname = new URL(ws.data.url).pathname;
         const route = this.isRouteMatching(pathname);
 
-        if (route?.handlers.open) {
+        if (route) {
           this.connections.add(ws);
-          route.handlers.open(ws);
+          if (route.handlers.open) {
+            route.handlers.open(ws);
+          }
         } else {
           ws.close(1003, "Route not allowed");
         }
       },
       close: (ws, code, message) => {
+        // Always remove the connection to avoid memory leak
+        this.connections.delete(ws);
+
         const pathname = new URL(ws.data.url).pathname;
         const route = this.isRouteMatching(pathname);
 
         if (route?.handlers.close) {
-          this.connections.delete(ws);
           route.handlers.close(ws, code, message);
         }
       },
