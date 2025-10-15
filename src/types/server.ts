@@ -1,4 +1,4 @@
-import type { BunFile, ServerWebSocket } from "bun";
+import type { BunFile } from "bun";
 
 export type ServerOptions = {
   port?: number;
@@ -8,7 +8,18 @@ export type ServerOptions = {
   unix?: string;
   reusePort?: boolean;
   maxRequestBodySize?: number;
-  // ws?: Partial<WebSocketOptions<WebSocketData>>;
+  ws?: {
+    maxPayloadLength?: number;
+    idleTimeout?: number;
+    backpressureLimit?: number;
+    closeOnBackpressureLimit?: boolean;
+    sendPings?: boolean;
+    publishToSelf?: boolean;
+    perMessageDeflate?: {
+      compress?: boolean;
+      decompress?: boolean;
+    };
+  };
 };
 
 export type TLSOptions = {
@@ -24,22 +35,4 @@ export type TLSOptions = {
 export type WebSocketData = {
   url: string;
   data: Record<string, any>;
-};
-
-export type WebSocketOptions<DataType = unknown> = {
-  message: (ws: ServerWebSocket<DataType>, message: string | Buffer) => void | Promise<void>;
-  open: (ws: ServerWebSocket<DataType>) => void | Promise<void>;
-  close: (ws: ServerWebSocket<DataType>, code: number, reason: string) => void | Promise<void>;
-  drain: (ws: ServerWebSocket<DataType>) => void | Promise<void>;
-  error: (ws: ServerWebSocket<DataType>, error: Error) => void | Promise<void>;
-  maxPayloadLength?: number;
-  idleTimeout?: number;
-  backpressureLimit?: number;
-  closeOnBackpressureLimit?: boolean;
-  sendPings?: boolean;
-  publishToSelf?: boolean;
-  perMessageDeflate?: {
-    compress?: boolean;
-    decompress?: boolean;
-  };
 };

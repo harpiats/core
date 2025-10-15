@@ -1,5 +1,4 @@
 import type { ServerWebSocket } from "bun";
-import type { WebSocketOptions } from "./types/server";
 import type { InternalWebSocketData, WebSocketHandlers, WebSocketInterface } from "./types/websocket";
 
 export class WebSocket<T = any> {
@@ -51,7 +50,7 @@ export class WebSocket<T = any> {
     return null;
   }
 
-  public getHandlers(): WebSocketOptions<InternalWebSocketData<T>> {
+  public getHandlers(): WebSocketHandlers<InternalWebSocketData<T>> {
     return {
       message: (ws, message) => {
         const pathname = new URL(ws.data.url).pathname;
