@@ -79,6 +79,17 @@ describe("Router", () => {
     expect(routes[0].controller).toBe(handler);
   });
 
+  it("should register a WS route", () => {
+    const handlers = { open: () => {}, message: () => {}, close: () => {} };
+    router.ws("/ws", handlers);
+
+    const routes = router.wsList();
+
+    expect(routes).toHaveLength(1);
+    expect(routes[0].path).toBe("/ws");
+    expect(routes[0].handlers).toBe(handlers);
+  });
+
   it("should throw an error if no controller is provided", () => {
     expect(() => router.get("/users")).toThrow("Controller handler is required.");
     expect(() => router.post("/users")).toThrow("Controller handler is required.");
