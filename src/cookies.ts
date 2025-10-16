@@ -47,7 +47,10 @@ export class Cookies {
   }
 
   public delete(name: string, options: CookieScopeOptions = {}): string {
-    return this.set(name, "", { ...options, expires: new Date(0) });
+    const cookieString = this.set(name, "", { ...options, maxAge: 0, expires: new Date(0) });
+    this.cookies.delete(name);
+
+    return cookieString;
   }
 
   public getAll(): Record<string, string> {

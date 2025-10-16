@@ -316,8 +316,14 @@ describe("Server", () => {
 
     it("should return a response if the request is a WebSocket upgrade", async () => {
       mockServer.upgrade.mockImplementationOnce(() => true);
+      mockRequest.headers.set("Cookie", "session_id=123; theme=dark");
+
       const result = await (app as any).handleRequest(mockRequest, mockServer);
+
       expect(result).toBeDefined();
+      expect(mockServer.upgrade).toHaveBeenCalledWith(mockRequest, {
+        data: { url: mockRequest.url, cookies: { session_id: "123", theme: "dark" } },
+      });
     });
 
     it("should handle cors", async () => {

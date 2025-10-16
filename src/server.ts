@@ -1,6 +1,7 @@
 import path from "node:path";
 
 import { Cors } from "./cors";
+import { Cookies } from "./cookies";
 import { Middleware } from "./middlewares";
 import { Request } from "./request";
 import { Response } from "./response";
@@ -250,9 +251,12 @@ export class Application {
     }
 
     const response = new Response();
+    const url = new URL(req.url);
 
     // Checks if the request is a WebSocket
-    if (server?.upgrade(req, { data: { url: req.url } })) {
+    const cookies = new Cookies(req.headers.get("Cookie") ?? undefined);
+
+    if (server?.upgrade(req, { data: { url: url.href, cookies: cookies.getAll() } })) {
       return response.parse();
     }
 
@@ -264,7 +268,7 @@ export class Application {
       }
     }
 
-    const urlPath = new URL(req.url).pathname;
+    const urlPath = url.pathname;
     const methodOverride = await this.methodOverride(req);
     const route = this.router.isRouteMatching(urlPath, methodOverride);
     const staticFileExists = await this.resolveStaticFiles(urlPath, response);
