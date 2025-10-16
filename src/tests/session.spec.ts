@@ -115,6 +115,34 @@ describe("Session", () => {
     expect(retrievedData).toBeUndefined();
   });
 
+  it("should get session data from a WebSocket connection", async () => {
+    const userData = { user: "ws_user" };
+    const sessionId = await session.create(userData);
+
+    const mockWs: any = {
+      data: {
+        cookies: {
+          session_id: sessionId,
+          other_cookie: "some_value",
+        },
+      },
+    };
+
+    const retrievedData = await session.fromWebSocket(mockWs);
+    expect(retrievedData).toEqual(userData);
+  });
+
+  it("should return undefined if no session cookie in WebSocket connection", async () => {
+    const mockWs: any = {
+      data: {
+        cookies: { other_cookie: "some_value" },
+      },
+    };
+
+    const retrievedData = await session.fromWebSocket(mockWs);
+    expect(retrievedData).toBeUndefined();
+  });
+
   it("should set a cookie with default options", () => {
     const res = new Response();
     const setSpy = spyOn((session as any).cookies, "set");

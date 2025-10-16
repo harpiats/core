@@ -94,24 +94,33 @@ describe("Cookies", () => {
   it("should delete a cookie", () => {
     cookies.set("keyToDelete", "value");
     const result = cookies.delete("keyToDelete");
+
     expect(result).toContain("keyToDelete=");
+    expect(result).toContain("Max-Age=0");
     expect(result).toContain("Expires=Thu, 01 Jan 1970 00:00:00 GMT");
+    expect(cookies.get("keyToDelete")).toBeUndefined();
   });
 
   it("should delete a cookie with path", () => {
     cookies.set("keyToDelete", "value", { path: "/myPath" });
     const result = cookies.delete("keyToDelete", { path: "/myPath" });
+
     expect(result).toContain("keyToDelete=");
+    expect(result).toContain("Max-Age=0");
     expect(result).toContain("Expires=Thu, 01 Jan 1970 00:00:00 GMT");
     expect(result).toContain("Path=/myPath");
+    expect(cookies.get("keyToDelete")).toBeUndefined();
   });
 
   it("should delete a cookie with domain", () => {
     cookies.set("keyToDelete", "value", { domain: "example.com" });
     const result = cookies.delete("keyToDelete", { domain: "example.com" });
+
     expect(result).toContain("keyToDelete=");
+    expect(result).toContain("Max-Age=0");
     expect(result).toContain("Expires=Thu, 01 Jan 1970 00:00:00 GMT");
     expect(result).toContain("Domain=example.com");
+    expect(cookies.get("keyToDelete")).toBeUndefined();
   });
 
   it("should get all cookies", () => {

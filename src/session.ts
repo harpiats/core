@@ -1,6 +1,7 @@
 import { Cookies } from "./cookies";
 import { MemoryStore } from "./memory-store";
 
+import type { ServerWebSocket } from "bun";
 import type { Request } from "./request";
 import type { Response } from "./response";
 import type { CookiesOptions } from "./types/cookies";
@@ -48,6 +49,16 @@ export class Session {
 
   public async fromRequest(req: Request): Promise<Record<string, any> | undefined> {
     const sessionId = req.cookies.get(this.cookieName);
+    if (sessionId) {
+      return this.get(sessionId);
+    }
+    return undefined;
+  }
+
+  public async fromWebSocket(
+    ws: ServerWebSocket<{ cookies?: Record<string, string> } & Record<string, any>>,
+  ): Promise<Record<string, any> | undefined> {
+    const sessionId = ws.data.cookies?.[this.cookieName];
     if (sessionId) {
       return this.get(sessionId);
     }
