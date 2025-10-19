@@ -1,5 +1,6 @@
 import fs, { readFile } from "node:fs/promises";
 import path, { join } from "node:path";
+
 import type { Application } from "./server";
 import type { Engine } from "./types/engine";
 import type { Blocks, Data, Options, PluginFunction } from "./types/template-engine";
@@ -39,23 +40,8 @@ export class TemplateEngine implements Engine {
     }
 
     const viewFilePath = await this.viewFilePathResolver(resolvedView);
-    const viewContent = await this.readFile(viewFilePath);
-    const layoutName = this.extractLayout(viewContent);
-    const { blocks, content: remainingView } = this.extractBlocks(viewContent);
 
-    if (remainingView.trim() && !blocks.body) {
-      blocks.body = remainingView;
-    }
-
-    let finalContent = layoutName ? await this.applyLayout(layoutName, blocks) : remainingView;
-
-    finalContent = await this.processPartials(finalContent, data);
-    finalContent = await this.processInclude(finalContent, path.dirname(viewFilePath), data);
-    finalContent = this.processOperations(finalContent, data);
-    finalContent = this.interpolateVariables(finalContent, data);
-    finalContent = this.removeComments(finalContent);
-
-    return finalContent;
+    return await this.processContent(viewFilePath, data);
   }
 
   public async renderTemplate(viewPath: string, data: Data = {}): Promise<string> {
@@ -69,30 +55,40 @@ export class TemplateEngine implements Engine {
         throw new Error(`No files found: ${absolutePath}`);
       }
 
-      const viewContent = await readFile(absolutePath, "utf-8");
-      const layoutName = this.extractLayout(viewContent);
-      const { blocks, content: remainingView } = this.extractBlocks(viewContent);
+      return await this.processContent(absolutePath, data);
+    } catch (error) {
+      console.log(error);
 
-      if (remainingView.trim() && !blocks.body) {
-        blocks.body = remainingView;
-      }
-
-      let finalContent = layoutName ? await this.applyLayout(layoutName, blocks) : remainingView;
-
-      finalContent = await this.processPartials(finalContent, data);
-      finalContent = await this.processInclude(finalContent, path.dirname(absolutePath), data);
-      finalContent = this.processOperations(finalContent, data);
-      finalContent = this.interpolateVariables(finalContent, data);
-      finalContent = this.removeComments(finalContent);
-
-      return finalContent;
-    } catch (_) {
       throw new Error("Error rendering template.");
     }
   }
 
   public registerPlugin(name: string, fn: PluginFunction): void {
     this.plugins[name] = fn;
+  }
+
+  private async processContent(viewFilePath: string, data: Data): Promise<string> {
+    let viewContent = await this.readFile(viewFilePath);
+
+    // Initial processing
+    viewContent = await this.processPartials(viewContent, data);
+    viewContent = await this.processInclude(viewContent, path.dirname(viewFilePath), data);
+    viewContent = this.processOperations(viewContent, data);
+    viewContent = this.removeComments(viewContent);
+
+    // Layout and blocks processing
+    const layoutName = this.extractLayoutName(viewContent);
+    const { blocks, content: remainingView } = this.extractBlocks(viewContent);
+
+    if (remainingView.trim() && Object.keys(blocks).length === 0) {
+      blocks.body = remainingView;
+    }
+
+    const layoutContent = await this.processLayout(remainingView);
+    const contantWithLayout = layoutName ? await this.applyLayout(layoutContent, blocks) : remainingView;
+    const finalContent = this.interpolateVariables(contantWithLayout, data);
+
+    return finalContent;
   }
 
   private async viewFilePathResolver(templateName: string): Promise<string> {
@@ -162,8 +158,9 @@ export class TemplateEngine implements Engine {
     }
   }
 
-  private extractLayout(content: string): string | null {
-    const match = content.match(/{{=\s*layout\(["'](.+?)["']\)\s*}}/);
+  private extractLayoutName(content: string): string | null {
+    const regex = /{{=\s*layout\(["'](.+?)["'](?:,\s*(.+?))?\)\s*}}/g;
+    const match = regex.exec(content);
 
     return match ? match[1] : null;
   }
@@ -184,13 +181,8 @@ export class TemplateEngine implements Engine {
     return { blocks, content: remainingContent };
   }
 
-  private async applyLayout(layoutName: string, blocks: Blocks): Promise<string> {
-    const layoutContent = await this.readFile(join(this.layoutsPath, `${layoutName}${this.fileExtension}`));
-
-    return layoutContent.replace(
-      /{{=\s*define\s+block\(["'](.+?)["']\)\s*}}/g,
-      (_, blockName) => blocks[blockName] || "",
-    );
+  private async applyLayout(layout: string, blocks: Blocks): Promise<string> {
+    return layout.replace(/{{=\s*define\s+block\(["'](.+?)["']\)\s*}}/g, (_, blockName) => blocks[blockName] || "");
   }
 
   private async processPartials(content: string, data: Data): Promise<string> {
@@ -223,6 +215,23 @@ export class TemplateEngine implements Engine {
       const renderedInclude = this.interpolateVariables(includeContent, { ...data, ...includeParams });
 
       content = content.replace(match[0], renderedInclude);
+    }
+
+    return content;
+  }
+
+  private async processLayout(content: string): Promise<string> {
+    const partialRegex = /{{=\s*layout\s*\(["'](.+?)["'](?:,\s*(.+?))?\)\s*}}/g;
+    const matches = [...content.matchAll(partialRegex)];
+
+    for (const match of matches) {
+      const layoutName = match[1];
+      const params = match[2] ? this.evaluateExpression(match[2], {}) : {};
+
+      const layoutContent = await this.readFile(join(this.layoutsPath, `${layoutName}${this.fileExtension}`));
+      const processed = this.interpolateVariables(layoutContent, { ...params });
+
+      content = content.replace(match[0], processed);
     }
 
     return content;
@@ -297,7 +306,7 @@ export class TemplateEngine implements Engine {
       return this.processExpression(expression, data, false);
     });
 
-    content = content.replace(/{{\s*(.+?)\s*}}/gs, (_, expression) => {
+    content = content.replace(/{{(?![=~])\s*(.+?)\s*}}/gs, (_, expression) => {
       return this.processExpression(expression, data, true);
     });
 
