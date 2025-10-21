@@ -1,5 +1,6 @@
 import fs, { readFile } from "node:fs/promises";
 import path, { join } from "node:path";
+import { colorize } from "./utils/colorize";
 
 import type { Application } from "./server";
 import type { Engine } from "./types/engine";
@@ -9,8 +10,8 @@ export class TemplateEngine implements Engine {
   private plugins: Record<string, PluginFunction> = {};
   private defaultViewName?: string;
   private viewsPath: string;
-  private layoutsPath: string;
-  private partialsPath: string;
+  private layoutsPath?: string;
+  private partialsPath?: string;
   private useModules: boolean;
   private currentModule: string | null = null;
   private fileExtension: string;
@@ -44,7 +45,7 @@ export class TemplateEngine implements Engine {
     return await this.processContent(viewFilePath, data);
   }
 
-  public async renderTemplate(viewPath: string, data: Data = {}): Promise<string> {
+  public async html(viewPath: string, data: Data = {}): Promise<string> {
     try {
       const viewFilePath = path.join(process.cwd(), `${viewPath}${this.fileExtension}`);
       const absolutePath = path.resolve(viewFilePath);
@@ -56,9 +57,7 @@ export class TemplateEngine implements Engine {
       }
 
       return await this.processContent(absolutePath, data);
-    } catch (error) {
-      console.log(error);
-
+    } catch (_) {
       throw new Error("Error rendering template.");
     }
   }
@@ -71,21 +70,39 @@ export class TemplateEngine implements Engine {
     let viewContent = await this.readFile(viewFilePath);
 
     // Initial processing
-    viewContent = await this.processPartials(viewContent, data);
-    viewContent = await this.processInclude(viewContent, path.dirname(viewFilePath), data);
-    viewContent = this.processOperations(viewContent, data);
     viewContent = this.removeComments(viewContent);
 
+    if (this.partialsPath) {
+      viewContent = await this.processPartials(viewContent, data);
+    }
+
+    viewContent = await this.processInclude(viewContent, path.dirname(viewFilePath), data);
+    viewContent = this.processOperations(viewContent, data);
+
+    // console.log(viewContent);
+
+    if (!this.layoutsPath) {
+      viewContent = this.interpolateVariables(viewContent, data);
+
+      return viewContent;
+    }
+
     // Layout and blocks processing
-    const layoutName = this.extractLayoutName(viewContent);
-    const { blocks, content: remainingView } = this.extractBlocks(viewContent);
+    const extractedBlocks = await this.extractBlocks(viewContent);
+    if (!extractedBlocks) {
+      viewContent = this.interpolateVariables(viewContent, data);
+
+      return viewContent;
+    }
+
+    const { blocks, content: remainingView } = extractedBlocks;
 
     if (remainingView.trim() && Object.keys(blocks).length === 0) {
       blocks.body = remainingView;
     }
 
     const layoutContent = await this.processLayout(remainingView);
-    const contantWithLayout = layoutName ? await this.applyLayout(layoutContent, blocks) : remainingView;
+    const contantWithLayout = this.layoutsPath ? await this.applyLayout(layoutContent, blocks) : remainingView;
     const finalContent = this.interpolateVariables(contantWithLayout, data);
 
     return finalContent;
@@ -153,32 +170,33 @@ export class TemplateEngine implements Engine {
   private async readFile(filePath: string): Promise<string> {
     try {
       return await readFile(filePath, "utf-8");
-    } catch (_) {
-      throw new Error("Error reading file.");
+    } catch (error) {
+      const message = colorize("#ff0000ff", `\nERROR: Unable to read file at ${filePath}\n`);
+      console.log(message);
+
+      throw new Error((error as Error).message);
     }
   }
 
-  private extractLayoutName(content: string): string | null {
-    const regex = /{{=\s*layout\(["'](.+?)["'](?:,\s*(.+?))?\)\s*}}/g;
-    const match = regex.exec(content);
+  private async extractBlocks(content: string): Promise<{ blocks: Blocks; content: string } | undefined> {
+    const layoutRegex = /{{=\s*layout\s*\(["'](.+?)["'](?:,\s*(.+?))?\)\s*}}/g;
+    const isLayoutDefined = layoutRegex.test(content);
 
-    return match ? match[1] : null;
-  }
+    if (isLayoutDefined) {
+      const blocks: Blocks = {};
+      const blockRegex = /{{=\s*block\(["'](.+?)["']\)\s*}}([\s\S]*?){{=\s*endblock\s*}}/g;
 
-  private extractBlocks(content: string): { blocks: Blocks; content: string } {
-    const blocks: Blocks = {};
-    const blockRegex = /{{=\s*block\(["'](.+?)["']\)\s*}}([\s\S]*?){{=\s*endblock\s*}}/g;
+      const remainingContent = content.replace(blockRegex, (_, blockName, blockContent) => {
+        // if (blockContent.length > 10000) {
+        // 	throw new Error("Block content too large");
+        // }
 
-    const remainingContent = content.replace(blockRegex, (_, blockName, blockContent) => {
-      // if (blockContent.length > 10000) {
-      // 	throw new Error("Block content too large");
-      // }
+        blocks[blockName] = blockContent;
+        return "";
+      });
 
-      blocks[blockName] = blockContent;
-      return "";
-    });
-
-    return { blocks, content: remainingContent };
+      return { blocks, content: remainingContent };
+    }
   }
 
   private async applyLayout(layout: string, blocks: Blocks): Promise<string> {
@@ -186,6 +204,8 @@ export class TemplateEngine implements Engine {
   }
 
   private async processPartials(content: string, data: Data): Promise<string> {
+    if (!this.partialsPath) throw new Error("Partials path is not defined.");
+
     const partialRegex = /{{=\s*partials?\(["'](.+?)["'](?:,\s*(.+?))?\)\s*}}/g;
     const matches = [...content.matchAll(partialRegex)];
 
@@ -221,8 +241,10 @@ export class TemplateEngine implements Engine {
   }
 
   private async processLayout(content: string): Promise<string> {
-    const partialRegex = /{{=\s*layout\s*\(["'](.+?)["'](?:,\s*(.+?))?\)\s*}}/g;
-    const matches = [...content.matchAll(partialRegex)];
+    if (!this.layoutsPath) return content;
+
+    const regex = /{{=\s*layout\s*\(["'](.+?)["'](?:,\s*(.+?))?\)\s*}}/g;
+    const matches = [...content.matchAll(regex)];
 
     for (const match of matches) {
       const layoutName = match[1];
@@ -302,12 +324,54 @@ export class TemplateEngine implements Engine {
   }
 
   private interpolateVariables(content: string, data: Data): string {
+    content = this.checkAndWarn(content);
+
     content = content.replace(/{{{\s*(.+?)\s*}}}/gs, (_, expression) => {
       return this.processExpression(expression, data, false);
     });
 
     content = content.replace(/{{(?![=~])\s*(.+?)\s*}}/gs, (_, expression) => {
       return this.processExpression(expression, data, true);
+    });
+
+    return content;
+  }
+
+  private checkAndWarn(content: string) {
+    content = content.replace(/{{=\s*layout\s*\(["'](.+?)["'](?:,\s*(.+?))?\)\s*}}/g, () => {
+      if (!this.layoutsPath) {
+        const message = colorize("#FFA500", "WARNING: You're trying to use a layout, but layout path is not defined.");
+
+        console.log(message);
+      }
+
+      return "";
+    });
+
+    content = content.replace(/{{=\s*block\(["'](.+?)["']\)\s*}}([\s\S]*?){{=\s*endblock\s*}}/g, (string) => {
+      if (!this.layoutsPath) {
+        const message = colorize(
+          "#FFA500",
+          "WARNING: You're trying to use a layout block, but layout path is not defined.",
+        );
+
+        console.log(message);
+      }
+
+      return string.replace(/{{=\s*block\(["'][^"']+["']\)\s*}}/g, "").replace(/{{=\s*endblock\s*}}/g, "");
+    });
+
+    content = content.replace(/{{=\s*partials?\s*\(["'](.+?)["'](?:,\s*(.+?))?\)\s*}}/g, () => {
+      if (!this.layoutsPath) {
+        const message = colorize(
+          "#FFA500",
+          "WARNING: You're trying to use a partial component, but partials path is not defined.",
+        );
+
+        console.log(message);
+      }
+
+      return "";
     });
 
     return content;

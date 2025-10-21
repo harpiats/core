@@ -92,8 +92,8 @@ class ResponseWrapper {
 
       this.headersInstance.set("Content-Type", "text/html");
       this.body = rendered;
-    } catch (error: any) {
-      throw new Error(`Error rendering template: ${error.message}`);
+    } catch (error) {
+      throw new Error((error as Error).message);
     }
 
     return this;
