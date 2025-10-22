@@ -23,6 +23,9 @@ export class TemplateEngine implements Engine {
     this.defaultViewName = options.viewName;
     this.useModules = options.useModules ?? false;
     this.fileExtension = options.fileExtension ?? ".html";
+    this.plugins = {
+      raw: (str: any) => str,
+    };
   }
 
   public configure(app: Application): void {
@@ -42,7 +45,9 @@ export class TemplateEngine implements Engine {
 
     const viewFilePath = await this.viewFilePathResolver(resolvedView);
 
-    return await this.processContent(viewFilePath, data);
+    const processedContent = await this.processContent(viewFilePath, data);
+
+    return this.minify(processedContent, "html");
   }
 
   public async html(viewPath: string, data: Data = {}): Promise<string> {
@@ -66,6 +71,27 @@ export class TemplateEngine implements Engine {
     this.plugins[name] = fn;
   }
 
+  public minify(text: string, type: "html" | "generic" = "generic"): string {
+    if (type === "html") {
+      return text
+        .replace(/<!--[\s\S]*?-->/g, "")
+        .replace(/>\s+</g, "><")
+        .replace(/\s+/g, " ")
+        .replace(/\s+>/g, ">")
+        .replace(/>\s+/g, ">")
+        .trim();
+    }
+
+    return text
+      .replace(/^\s*[\r\n]/gm, "")
+      .replace(/[\r\n]{2,}/g, "\n")
+      .replace(/^[ \t]+/gm, "")
+      .replace(/[ \t]+$/gm, "")
+      .replace(/[ \t]+/g, " ")
+      .replace(/\s+([.,;:!?])/g, "$1")
+      .trim();
+  }
+
   private async processContent(viewFilePath: string, data: Data): Promise<string> {
     let viewContent = await this.readFile(viewFilePath);
 
@@ -78,8 +104,6 @@ export class TemplateEngine implements Engine {
 
     viewContent = await this.processInclude(viewContent, path.dirname(viewFilePath), data);
     viewContent = this.processOperations(viewContent, data);
-
-    // console.log(viewContent);
 
     if (!this.layoutsPath) {
       viewContent = this.interpolateVariables(viewContent, data);
@@ -179,12 +203,12 @@ export class TemplateEngine implements Engine {
   }
 
   private async extractBlocks(content: string): Promise<{ blocks: Blocks; content: string } | undefined> {
-    const layoutRegex = /{{=\s*layout\s*\(["'](.+?)["'](?:,\s*(.+?))?\)\s*}}/g;
+    const layoutRegex = /@layout\s*\(["'](.+?)["'](?:,\s*(.+?))?\)/g;
     const isLayoutDefined = layoutRegex.test(content);
 
     if (isLayoutDefined) {
       const blocks: Blocks = {};
-      const blockRegex = /{{=\s*block\(["'](.+?)["']\)\s*}}([\s\S]*?){{=\s*endblock\s*}}/g;
+      const blockRegex = /@block\(["'](.+?)["']\)\s*([\s\S]*?)@endblock/g;
 
       const remainingContent = content.replace(blockRegex, (_, blockName, blockContent) => {
         // if (blockContent.length > 10000) {
@@ -200,13 +224,13 @@ export class TemplateEngine implements Engine {
   }
 
   private async applyLayout(layout: string, blocks: Blocks): Promise<string> {
-    return layout.replace(/{{=\s*define\s+block\(["'](.+?)["']\)\s*}}/g, (_, blockName) => blocks[blockName] || "");
+    return layout.replace(/@yield\s*\(["'](.+?)["']\)/g, (_, blockName) => blocks[blockName] || "");
   }
 
   private async processPartials(content: string, data: Data): Promise<string> {
-    if (!this.partialsPath) throw new Error("Partials path is not defined.");
+    if (!this.partialsPath) throw new Error("Component path is not defined.");
 
-    const partialRegex = /{{=\s*partials?\(["'](.+?)["'](?:,\s*(.+?))?\)\s*}}/g;
+    const partialRegex = /@component\(["'](.+?)["'](?:,\s*(.+?))?\)/g;
     const matches = [...content.matchAll(partialRegex)];
 
     for (const match of matches) {
@@ -223,7 +247,7 @@ export class TemplateEngine implements Engine {
   }
 
   private async processInclude(content: string, currentDir: string, data: Data): Promise<string> {
-    const includeRegex = /{{=\s*include\(["'](.+?)["'](?:,\s*(.+?))?\)\s*}}/g;
+    const includeRegex = /@import\(["'](.+?)["'](?:,\s*(.+?))?\)/g;
     const matches = [...content.matchAll(includeRegex)];
 
     for (const match of matches) {
@@ -243,7 +267,7 @@ export class TemplateEngine implements Engine {
   private async processLayout(content: string): Promise<string> {
     if (!this.layoutsPath) return content;
 
-    const regex = /{{=\s*layout\s*\(["'](.+?)["'](?:,\s*(.+?))?\)\s*}}/g;
+    const regex = /@layout\s*\(["'](.+?)["'](?:,\s*(.+?))?\)/g;
     const matches = [...content.matchAll(regex)];
 
     for (const match of matches) {
@@ -268,49 +292,92 @@ export class TemplateEngine implements Engine {
   }
 
   private extractVariables(content: string, data: Data): string {
-    return content.replace(/{{~\s*var\s+(\w+)\s*=\s*(.+?)\s*}}/g, (_, varName, value) => {
+    const blockRegex = /@set\s+(\w+)\s*=\s*([\s\S]*?)@endset/g;
+
+    content = content.replace(blockRegex, (_, varName, blockContent) => {
       try {
-        data[varName] = this.evaluateExpression(value, data);
+        data[varName] = this.evaluateExpression(blockContent.trim(), data);
       } catch (error) {
-        console.error(`Error evaluating expression: ${value}`, error);
+        console.error(`Error evaluating block expression: ${blockContent}`, error);
         data[varName] = "";
       }
       return "";
     });
+
+    return content;
   }
 
   private processConditionals(content: string, data: Data): string {
-    return content.replace(
-      /{{~\s*if\s*\((.+?)\)\s*}}\s*([\s\S]*?)\s*({{~\s*else\s*}}\s*([\s\S]*?)\s*)?{{~\s*endif\s*}}/g,
-      (_, condition, ifBlock, _elseBlock, elseContent) => {
-        // Try to resolve as plugin
-        const pluginResult = this.callPlugin(condition, data);
-        if (pluginResult !== undefined && pluginResult !== null) {
-          return pluginResult ? ifBlock : elseContent || "";
-        }
+    const conditionalRegex = /@if\s+([^\n@]+)([\s\S]*?)@endif/g;
 
-        // If not plugin, evaluates as normal expression
-        const conditionResult = this.evaluateExpression(condition, data);
-        return conditionResult ? ifBlock : elseContent || "";
-      },
-    );
+    return content.replace(conditionalRegex, (_match, condition, blocks) => {
+      // Split the blocks into if, elseif, and else parts
+      const blockParts = blocks.split(/(?=@else(?:if[^\n@]+)?)/);
+
+      let ifBlock = "";
+      let elseBlock = "";
+      const elseifBlocks: Array<{ condition: string; content: string }> = [];
+
+      // Parse all blocks
+      for (const part of blockParts) {
+        if (part.startsWith("@elseif")) {
+          const elseifMatch = part.match(/@elseif\s+([^\n@]+)([\s\S]*)/);
+          if (elseifMatch) {
+            elseifBlocks.push({
+              condition: elseifMatch[1],
+              content: elseifMatch[2],
+            });
+          }
+        } else if (part.startsWith("@else")) {
+          elseBlock = part.replace(/@else\s*/, "");
+        } else {
+          ifBlock = part;
+        }
+      }
+
+      // Check main condition
+      let pluginResult = this.callPlugin(condition, data);
+      if (pluginResult !== undefined && pluginResult !== null) {
+        if (pluginResult) return this.processConditionals(ifBlock, data);
+      } else if (this.evaluateExpression(condition, data)) {
+        return this.processConditionals(ifBlock, data);
+      }
+
+      // Check elseif conditions
+      for (const elseif of elseifBlocks) {
+        pluginResult = this.callPlugin(elseif.condition, data);
+        if (pluginResult !== undefined && pluginResult !== null) {
+          if (pluginResult) return this.processConditionals(elseif.content, data);
+        } else if (this.evaluateExpression(elseif.condition, data)) {
+          return this.processConditionals(elseif.content, data);
+        }
+      }
+
+      // Return else block
+      return elseBlock ? this.processConditionals(elseBlock, data) : "";
+    });
   }
 
   private processLoops(content: string, data: Data): string {
-    return content.replace(
-      /{{~\s*for\s+(?:\[(\w+),\s*(\w+)\]|(\w+))\s+in\s+(.+?)\s*}}([\s\S]*?){{~\s*endfor\s*}}/g,
-      (_, keyName, valueName, itemName, listName, blockContent) => {
-        const list = this.evaluateExpression(listName, data) || [];
-        if (keyName && valueName) {
-          return Object.entries(list)
-            .map(([key, value]) =>
-              this.processBlockContent(blockContent, { ...data, [keyName]: key, [valueName]: value }),
-            )
-            .join("");
-        }
-        return list.map((item: any) => this.processBlockContent(blockContent, { ...data, [itemName]: item })).join("");
-      },
-    );
+    const loopRegex = /@for\s+(?:\[(\w+),\s*(\w+)\]|(\w+))\s+in\s+([^\s]+)([^@]*)@endfor/g;
+
+    return content.replace(loopRegex, (_match, keyName, valueName, itemName, listName, blockContent) => {
+      const list = this.evaluateExpression(listName, data) || [];
+
+      if (keyName && valueName) {
+        // Object iteration - [key, value] in object
+        return Object.entries(list)
+          .map(([key, value]) =>
+            this.processBlockContent(blockContent.trim(), { ...data, [keyName]: key, [valueName]: value }),
+          )
+          .join("");
+      } else {
+        // Array iteration - item in array
+        return list
+          .map((item: any) => this.processBlockContent(blockContent.trim(), { ...data, [itemName]: item }))
+          .join("");
+      }
+    });
   }
 
   private processBlockContent(content: string, data: Data): string {
@@ -326,11 +393,11 @@ export class TemplateEngine implements Engine {
   private interpolateVariables(content: string, data: Data): string {
     content = this.checkAndWarn(content);
 
-    content = content.replace(/{{{\s*(.+?)\s*}}}/gs, (_, expression) => {
-      return this.processExpression(expression, data, false);
+    content = content.replace(/{{\s*raw\(([\s\S]*?)\)\s*}}/gs, (_, innerExpression) => {
+      return this.processExpression(innerExpression, data, false);
     });
 
-    content = content.replace(/{{(?![=~])\s*(.+?)\s*}}/gs, (_, expression) => {
+    content = content.replace(/{{(?![{])[\s]*(.+?)[\s]*}}/gs, (_, expression) => {
       return this.processExpression(expression, data, true);
     });
 
@@ -338,7 +405,7 @@ export class TemplateEngine implements Engine {
   }
 
   private checkAndWarn(content: string) {
-    content = content.replace(/{{=\s*layout\s*\(["'](.+?)["'](?:,\s*(.+?))?\)\s*}}/g, () => {
+    content = content.replace(/@layout\s*\(["'](.+?)["'](?:,\s*(.+?))?\)/g, () => {
       if (!this.layoutsPath) {
         const message = colorize("#FFA500", "WARNING: You're trying to use a layout, but layout path is not defined.");
 
@@ -348,7 +415,7 @@ export class TemplateEngine implements Engine {
       return "";
     });
 
-    content = content.replace(/{{=\s*block\(["'](.+?)["']\)\s*}}([\s\S]*?){{=\s*endblock\s*}}/g, (string) => {
+    content = content.replace(/@block\(["'](.+?)["']\)\s*([\s\S]*?)@endblock/g, (string) => {
       if (!this.layoutsPath) {
         const message = colorize(
           "#FFA500",
@@ -358,14 +425,14 @@ export class TemplateEngine implements Engine {
         console.log(message);
       }
 
-      return string.replace(/{{=\s*block\(["'][^"']+["']\)\s*}}/g, "").replace(/{{=\s*endblock\s*}}/g, "");
+      return string.replace(/@block\(["'][^"']+["']\)/g, "").replace(/@endblock/g, "");
     });
 
-    content = content.replace(/{{=\s*partials?\s*\(["'](.+?)["'](?:,\s*(.+?))?\)\s*}}/g, () => {
+    content = content.replace(/@component\(["'](.+?)["'](?:,\s*(.+?))?\)/g, () => {
       if (!this.layoutsPath) {
         const message = colorize(
           "#FFA500",
-          "WARNING: You're trying to use a partial component, but partials path is not defined.",
+          "WARNING: You're trying to use a component, but components path is not defined.",
         );
 
         console.log(message);
@@ -398,8 +465,11 @@ export class TemplateEngine implements Engine {
       if (evaluated !== undefined && evaluated !== null) {
         return shouldEscape ? this.escapeHtml(evaluated) : evaluated;
       }
-    } catch {
-      // If the expression fails, it returns an empty string.
+    } catch (error) {
+      console.log(colorize("#FFA500", `[Template Engine] Expression evaluation failed: "${expression}"`));
+      console.log(colorize("#ff0000ff", `[Template Engine] Error: ${error instanceof Error ? error.message : error}`));
+
+      return "";
     }
 
     return "";
