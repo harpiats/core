@@ -450,13 +450,14 @@ import { TemplateEngine } from "harpiats/template-engine";
 
 const baseDir = process.cwd();
 
-export const html = new TemplateEngine({
+export const engine = new TemplateEngine({
   viewName: "page", // page.html will be rendered
   useModules: false, // true if uses a module structure (e.g. modules/users/pages/home/page.html)
+  fileExtension: ".html", // The default is `.html`, but you can use `.txt`, `.hml`, or any other.
   path: {
     views: path.join(baseDir, "src", "resources", "pages"),
-    layouts: path.join(baseDir, "src", "resources", "layouts"),
-    partials: path.join(baseDir, "src", "resources", "partials"),
+    layouts: path.join(baseDir, "src", "resources", "layouts"), // optional
+    partials: path.join(baseDir, "src", "resources", "partials"), // optional
   },
 });
 ```
@@ -465,10 +466,10 @@ And set up the application to use the engine:
 
 ```typescript
 import harpia from "harpiats";
-import { html } from "app/config/template-engine";
+import { engine } from "app/config/template-engine";
 
 const app = harpia();
-html.configure(app);
+engine.configure(app);
 
 app.get("/books", async (req, res) => {
   await res.render("home", { title: "Books" });
@@ -484,9 +485,10 @@ import { TemplateEngine } from "harpiats/template-engine";
 
 const baseDir = process.cwd();
 
-export const html = new TemplateEngine({
+export const engine = new TemplateEngine({
   viewName: "page", // page.html will be rendered
   useModules: true, // true if uses a module structure (e.g. modules/users/pages/home/page.html)
+  fileExtension: ".html", // The default is `.html`, but you can use `.txt`, `.hml`, or any other.
   path: {
     views: path.join(baseDir, "modules", "**", "pages"),
     layouts: path.join(baseDir, "resources", "layouts"),
@@ -499,10 +501,10 @@ And set up the application to use the engine:
 
 ```typescript
 import harpia from "harpiats";
-import { html } from "app/config/template-engine";
+import { engine } from "app/config/template-engine";
 
 const app = harpia();
-html.configure(app);
+engine.configure(app);
 
 app.get("/books", async (req, res) => {
   await res.module("books").render("home", { title: "Books" });
@@ -514,14 +516,14 @@ app.listen...
 It is also possible to render a template from its path, regardless of where it is in the application. To do this, we can follow the example:
 ```typescript
 import harpia from "harpiats";
-import { html } from "app/config/template-engine";
+import { engine } from "app/config/template-engine";
 
 const app = harpia();
-html.configure(app);
+engine.configure(app);
 
 app.post("/send-email", async (req, res) => {
   const data = {}
-  const content = await html.renderTemplate("app/services/mailer/templates/account-created", { data });
+  const content = await engine.generate("app/services/mailer/templates/account-created", { data });
 
   console.log(content);
 });
@@ -529,66 +531,85 @@ app.post("/send-email", async (req, res) => {
 app.listen...
 ```
 
-**Harpia Tempate Engine Syntax**
-- Use html files.
-- To use a layout: `{{= layout('default') }}`
-- To use variables: `{{ title }}`.
-- To define a block: `{{= define block("body") }}`.
-- To insert code into a block: `{{= block('body') }} <h1>{{ message  }}</h1> {{= endblock }}`.
-- To include a file `{{= include('welcome', { message: 'Custom message.' }) }}`.
-- To use a partial `{{= partial('card', { name: 'Product A', price: 99.87 }) }}`.
-- To use a comment `## This is a comment`;
-- To define a variable: `{{~ var title = "Homepage" }}`.
-- To use if conditions:
-  ```html
-  {{~ if(isActive) }} <p>User is active.</p> {{~ endif }}
+#### Harpia Template Engine Syntax Overview
 
-  {{~ if(isActive) }}
-    <p>User is active.</p>
-  {{~ else }}
-    <p>User is not active.</p>
-  {{~ endif }}
+| Type                          | Syntax                                            | Description                                                                | Example                                                                 |
+| ------------------------------ | ------------------------------------------------ | -------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| **Variable / Output**          | `{{ expr }}`                                     | Inserts the result of an expression into the template.                     | `<h1>{{ title }}</h1>`                                                  |
+| **Plugin / Function**          | `{{ fn(arg1, arg2) }}`                           | Calls a registered plugin or function and inserts its result.              | `<p>{{ uppercase(username) }}</p>`                                      |
+| **Local Assignment**           | `@set var = value @endset`                       | Declares a local variable available within the template scope.             | `@set name = "Lucas" @endset\n<p>{{ name }}</p>`                        |
+| **Conditional**                | `@if condition ... @elseif ... @else ... @endif` | Defines conditional logic with optional branches.                          | `@if isAdmin\n  <p>Admin</p>\n@else\n  <p>User</p>\n@endif`             |
+| **Array Loop**                 | `@for item in items ... @endfor`                 | Iterates over an array; `item` represents the current element.             | `@for item in items\n  <li>{{ item }}</li>\n@endfor`                    |
+| **Object Loop**                | `@for [key, value] in obj ... @endfor`           | Iterates over key/value pairs in an object.                                | `@for [k, v] in obj\n  <li>{{ k }}: {{ v }}</li>\n@endfor`              |
+| **Layout / Inheritance**       | `@layout("default", { key: value })`             | Defines the base layout and optionally passes static parameters.           | `@layout("default", { title: "Homepage" })`                             |
+| **Block Placeholder**          | `@yield("block_name")`                           | Defines a placeholder inside the layout for injected content.              | `<body>\n  @yield("content")\n</body>`                                  |
+| **Content Block**              | `@block("block_name") ... @endblock`             | Defines the content for a named block to be inserted into a layout.        | `@block("content")\n  <h1>Hello</h1>\n@endblock`                         |
+| **Import/Include**             | `@import("component", { key: value })`           | Includes another template relative to the current view, with props.        | `@import("button", { text: "Save" })`                                   |
+| **Partial/Component**          | `@component("name", { key: value })`             | Includes a reusable component from the partials directory.                 | `@component("header", { user: currentUser })`                           |
+| **Comment**                    | `## comment`                                     | Defines a comment line that is not rendered in the final HTML.             | `## This is a comment`                                                  |
 
-  <p>{{ isActive ? 'Active' : 'Inactive' }}</p>
-  ```
+#### Plugin Usage Example:
 
-  - To use for loops:
-  ```html
-  {{~ for num in numbers }}
-    <p>Number: {{ num }}</p>
-  {{~ endfor }}
+```typescript
+import path from "node:path";
+import { TemplateEngine } from "harpiats/template-engine";
 
-  {{~ for [key, value] in products }}
-    <p>Product {{ key }}: {{ value.name }} - $ {{ value.price }}</p>
-  {{~ endfor }}
-  ```
+const baseDir = process.cwd();
 
-- To register a plugin, in the template-engine.ts file:
-  ```typescript
-    import path from "node:path";
-    import { TemplateEngine } from "harpiats/template-engine";
+export const engine = new TemplateEngine({
+  viewName: "page",
+  useModules: false,
+  fileExtension: ".html",
+  path: {
+    views: path.join(baseDir, "src", "resources", "pages"),
+    layouts: path.join(baseDir, "src", "resources", "layouts"),
+    partials: path.join(baseDir, "src", "resources", "partials"),
+  },
+});
 
-    const baseDir = process.cwd();
-
-    export const html = new TemplateEngine({
-      viewName: "page",
-      useModules: false,
-      path: {
-        views: path.join(baseDir, "src", "resources", "pages"),
-        layouts: path.join(baseDir, "src", "resources", "layouts"),
-        partials: path.join(baseDir, "src", "resources", "partials"),
-      },
-    });
-
-    html.registerPlugin("uppercase", (str: string) => str.toUpperCase());
-    html.registerPlugin("sum", (a: number, b: number) => a + b);
-  ```
+// Register custom plugins
+engine.registerPlugin("uppercase", (str: string) => str.toUpperCase());
+engine.registerPlugin("sum", (a: number, b: number) => a + b);
+```
 
 and in the .html file:
-  ```html
-    <p>Uppercase plugin: {{{ uppercase(user.name) }}}</p>
-    <p>Sum plugin: {{{ sum(10, 20) }}}</p>
-  ```
+```html
+  <p>Uppercase plugin: {{ uppercase(user.name) }}</p>
+  <p>Sum plugin: {{ sum(10, 20) }}</p>
+```
+
+#### Layout Example
+
+Layout name: default.html
+```html
+<html>
+  <head>
+    <title>{{ title }}</title>
+  </head>
+  <body>
+    @yield("content")
+  </body>
+</html>
+```
+
+View:
+```html
+@layout("default", { title: "Homepage" })
+
+@block("content")
+  <h1>Welcome, {{ user.name }}!</h1>
+  <p>{{ uppercase("this page uses the default layout.") }}</p>
+@endblock
+```
+
+#### Unescaped Content
+
+Using the `raw(...)` plugin, you can add content without escaping.
+
+```html
+<p>{{ raw("<script>alert('xss')</script>") }}</p>
+```
+
 ### Method Override
 The Method Override technique is commonly used to simulate HTTP methods like `PUT`, `DELETE`, and `PATCH` in web applications where the client (e.g., browsers) may not natively support these methods. This is particularly useful when working with HTML forms, which only support `GET` and `POST` methods.
 

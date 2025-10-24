@@ -123,9 +123,7 @@ describe("Response", () => {
     const app = Application.getInstance();
     app.engine.set(mockEngine as unknown as TemplateEngine);
 
-    await expect(response.render("index", { title: "Test" })).rejects.toThrow(
-      "Error rendering template: Rendering failed",
-    );
+    await expect(response.render("index", { title: "Test" })).rejects.toThrow("Rendering failed");
   });
 
   it("should set cookie with options", () => {
