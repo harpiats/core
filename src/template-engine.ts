@@ -44,13 +44,12 @@ export class TemplateEngine implements Engine {
     }
 
     const viewFilePath = await this.viewFilePathResolver(resolvedView);
-
     const processedContent = await this.processContent(viewFilePath, data);
 
     return this.minify(processedContent, "html");
   }
 
-  public async html(viewPath: string, data: Data = {}): Promise<string> {
+  public async generate(viewPath: string, data: Data = {}): Promise<string> {
     try {
       const viewFilePath = path.join(process.cwd(), `${viewPath}${this.fileExtension}`);
       const absolutePath = path.resolve(viewFilePath);
@@ -359,7 +358,7 @@ export class TemplateEngine implements Engine {
   }
 
   private processLoops(content: string, data: Data): string {
-    const loopRegex = /@for\s+(?:\[(\w+),\s*(\w+)\]|(\w+))\s+in\s+([^\s]+)([^@]*)@endfor/g;
+    const loopRegex = /@for\s+(?:\[(\w+),\s*(\w+)\]|(\w+))\s+in\s+(.+?)\n([\s\S]*?)@endfor/g;
 
     return content.replace(loopRegex, (_match, keyName, valueName, itemName, listName, blockContent) => {
       const list = this.evaluateExpression(listName, data) || [];
