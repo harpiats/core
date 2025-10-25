@@ -19,7 +19,7 @@ export class TemplateEngine implements Engine {
   constructor(options: Options) {
     this.viewsPath = options.path.views;
     this.layoutsPath = options.path.layouts;
-    this.partialsPath = options.path.partials;
+    this.partialsPath = options.path.components;
     this.defaultViewName = options.viewName;
     this.useModules = options.useModules ?? false;
     this.fileExtension = options.fileExtension ?? ".html";

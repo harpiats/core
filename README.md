@@ -457,7 +457,7 @@ export const engine = new TemplateEngine({
   path: {
     views: path.join(baseDir, "src", "resources", "pages"),
     layouts: path.join(baseDir, "src", "resources", "layouts"), // optional
-    partials: path.join(baseDir, "src", "resources", "partials"), // optional
+    components: path.join(baseDir, "src", "resources", "components"), // optional
   },
 });
 ```
@@ -492,7 +492,7 @@ export const engine = new TemplateEngine({
   path: {
     views: path.join(baseDir, "modules", "**", "pages"),
     layouts: path.join(baseDir, "resources", "layouts"),
-    partials: path.join(baseDir, "resources", "partials"),
+    components: path.join(baseDir, "resources", "components"),
   },
 });
 ```
@@ -543,9 +543,9 @@ app.listen...
 | **Object Loop**                | `@for [key, value] in obj ... @endfor`           | Iterates over key/value pairs in an object.                                | `@for [k, v] in obj\n  <li>{{ k }}: {{ v }}</li>\n@endfor`              |
 | **Layout / Inheritance**       | `@layout("default", { key: value })`             | Defines the base layout and optionally passes static parameters.           | `@layout("default", { title: "Homepage" })`                             |
 | **Block Placeholder**          | `@yield("block_name")`                           | Defines a placeholder inside the layout for injected content.              | `<body>\n  @yield("content")\n</body>`                                  |
-| **Content Block**              | `@block("block_name") ... @endblock`             | Defines the content for a named block to be inserted into a layout.        | `@block("content")\n  <h1>Hello</h1>\n@endblock`                         |
+| **Content Block**              | `@block("block_name") ... @endblock`             | Defines the content for a named block to be inserted into a layout.        | `@block("content")\n  <h1>Hello</h1>\n@endblock`                        |
 | **Import/Include**             | `@import("component", { key: value })`           | Includes another template relative to the current view, with props.        | `@import("button", { text: "Save" })`                                   |
-| **Partial/Component**          | `@component("name", { key: value })`             | Includes a reusable component from the partials directory.                 | `@component("header", { user: currentUser })`                           |
+| **Partial/Component**          | `@component("name", { key: value })`             | Includes a reusable component from the components directory.               | `@component("header", { user: currentUser })`                           |
 | **Comment**                    | `## comment`                                     | Defines a comment line that is not rendered in the final HTML.             | `## This is a comment`                                                  |
 
 #### Plugin Usage Example:
@@ -563,7 +563,7 @@ export const engine = new TemplateEngine({
   path: {
     views: path.join(baseDir, "src", "resources", "pages"),
     layouts: path.join(baseDir, "src", "resources", "layouts"),
-    partials: path.join(baseDir, "src", "resources", "partials"),
+    components: path.join(baseDir, "src", "resources", "components"),
   },
 });
 
@@ -1556,4 +1556,3 @@ This integration provides a persistent session management system backed by Redis
 ## Authors
 
 - [@lucasnjsilva](https://www.github.com/lucasnjsilva)
-

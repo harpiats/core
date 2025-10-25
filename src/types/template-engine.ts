@@ -8,6 +8,6 @@ export type Options = {
   path: {
     views: string;
     layouts?: string;
-    partials?: string;
+    components?: string;
   };
 };

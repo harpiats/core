@@ -29,7 +29,7 @@ function createTestEngine(options: TestEngineOptions = {}) {
     path: {
       views: join(TEST_DIR, "views"),
       layouts: join(TEST_DIR, "layouts"),
-      partials: join(TEST_DIR, "components"),
+      components: join(TEST_DIR, "components"),
       ...options.path,
     },
     fileExtension: options.fileExtension ?? ".html",
@@ -106,7 +106,6 @@ describe("TemplateEngine", () => {
     test("should apply a layout with params", async () => {
       const engine = createTestEngine();
       const result = await engine.render("page-params");
-      console.log(result);
 
       expect(result).toMatch("<html><head><title>Homepage</title></head><body>Hello</body></html>");
     });
