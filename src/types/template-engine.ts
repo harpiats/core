@@ -7,7 +7,7 @@ export type Options = {
   fileExtension?: string;
   path: {
     views: string;
-    layouts: string;
-    partials: string;
+    layouts?: string;
+    components?: string;
   };
 };

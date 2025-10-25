@@ -3,7 +3,7 @@ import type { ServerWebSocket } from "bun";
 import { WebSocket } from "../websocket";
 
 describe("WebSocket", () => {
-  let ws: WebSocket;
+  let websocket: WebSocket;
   const mockWs = (url: string): ServerWebSocket<any> =>
     ({
       data: { url },
@@ -17,55 +17,80 @@ describe("WebSocket", () => {
     }) as any;
 
   beforeEach(() => {
-    ws = new WebSocket();
+    websocket = new WebSocket();
   });
 
   describe("Core Functionality", () => {
     test("should initialize with empty state", () => {
-      expect(ws.list()).toEqual([]);
-      expect(ws["connections"].size).toBe(0);
+      expect(websocket.list()).toEqual([]);
+      expect(websocket["connections"].size).toBe(0);
     });
 
     test("should register routes", () => {
       const handler = { open: mock(() => {}) };
-      ws.register("/chat", handler);
-      expect(ws.list()).toHaveLength(1);
+      websocket.ws("/chat", handler);
+      expect(websocket.list()).toHaveLength(1);
+    });
+
+    test("should register multiple routes via register()", () => {
+      const routes = [
+        { path: "/chat", handlers: { open: mock(() => {}) } },
+        { path: "/notifications", handlers: { open: mock(() => {}) } },
+      ];
+      websocket.register(routes);
+      expect(websocket.list()).toHaveLength(2);
+      expect(websocket.get("/chat")).toBeDefined();
+      expect(websocket.get("/notifications")).toBeDefined();
     });
   });
 
   describe("Route Matching", () => {
     beforeEach(() => {
-      ws.register("/chat", {});
-      ws.register("/user/:id", {});
+      websocket.ws("/chat", {});
+      websocket.ws("/user/:id", {});
     });
 
     test("should find exact path", () => {
-      expect(ws.get("/chat")).toBeDefined();
+      expect(websocket.get("/chat")).toBeDefined();
+    });
+
+    test("should return undefined for non-existent exact path", () => {
+      expect(websocket.get("/non-existent")).toBeUndefined();
     });
 
     test("should match parameterized routes", () => {
-      expect(ws.isRouteMatching("/user/123")).toMatchObject({ path: "/user/:id" });
+      expect(websocket.isRouteMatching("/user/123")).toMatchObject({ path: "/user/:id" });
     });
 
     test("should reject invalid paths", () => {
-      expect(ws.isRouteMatching("/invalid")).toBeNull();
+      expect(websocket.isRouteMatching("/invalid")).toBeNull();
     });
   });
 
   describe("Connection Handling", () => {
     test("should accept valid connections", () => {
       const handler = { open: mock(() => {}) };
-      ws.register("/chat", handler);
+      websocket.ws("/chat", handler);
       const wsInstance = mockWs("ws://localhost/chat");
 
-      ws.all().open(wsInstance);
+      websocket.getHandlers().open(wsInstance);
       expect(handler.open).toHaveBeenCalled();
-      expect(ws["connections"].size).toBe(1);
+      expect(websocket["connections"].size).toBe(1);
+    });
+
+    test("should add connection even if open handler is not defined", () => {
+      websocket.ws("/chat", {}); // No open handler
+      const wsInstance = mockWs("ws://localhost/chat");
+
+      websocket.getHandlers().open(wsInstance);
+
+      expect(websocket["connections"].has(wsInstance)).toBe(true);
+      expect(websocket["connections"].size).toBe(1);
     });
 
     test("should reject invalid routes", () => {
       const wsInstance = mockWs("ws://localhost/invalid");
-      ws.all().open(wsInstance);
+      websocket.getHandlers().open(wsInstance);
       expect(wsInstance.close).toHaveBeenCalledWith(1003, "Route not allowed");
     });
   });
@@ -73,57 +98,111 @@ describe("WebSocket", () => {
   describe("Message Handling", () => {
     test("should process messages", () => {
       const handler = { message: mock(() => {}) };
-      ws.register("/chat", handler);
+      websocket.ws("/chat", handler);
       const wsInstance = mockWs("ws://localhost/chat");
 
-      ws.all().message(wsInstance, "test");
+      websocket.getHandlers().message(wsInstance, "test");
       expect(handler.message).toHaveBeenCalled();
     });
 
     test("should broadcast messages", () => {
       const handler = { message: mock(() => {}) };
-      ws.register("/chat", handler);
+      websocket.ws("/chat", handler);
       const ws1 = mockWs("ws://localhost/chat");
       const ws2 = mockWs("ws://localhost/chat");
 
-      ws["connections"].add(ws1);
-      ws["connections"].add(ws2);
-      ws.all().message(ws1, "hello");
+      websocket["connections"].add(ws1);
+      websocket["connections"].add(ws2);
+      websocket.getHandlers().message(ws1, "hello");
 
       expect(ws2.send).toHaveBeenCalledWith("hello");
+    });
+
+    test("should not broadcast if route has no message handler", () => {
+      websocket.ws("/chat", {}); // No message handler
+      const ws1 = mockWs("ws://localhost/chat");
+      const ws2 = mockWs("ws://localhost/chat");
+
+      websocket["connections"].add(ws1);
+      websocket["connections"].add(ws2);
+      websocket.getHandlers().message(ws1, "hello");
+
+      expect(ws2.send).not.toHaveBeenCalled();
+    });
+
+    test("should not broadcast to inactive connections", () => {
+      const handler = { message: mock(() => {}) };
+      websocket.ws("/chat", handler);
+      const ws1 = mockWs("ws://localhost/chat");
+      const ws2 = { ...mockWs("ws://localhost/chat"), readyState: 3 as const }; // Closed state
+
+      websocket["connections"].add(ws1);
+      websocket["connections"].add(ws2);
+      websocket.getHandlers().message(ws1, "hello");
+
+      expect(ws2.send).not.toHaveBeenCalled();
     });
   });
 
   describe("Lifecycle Events", () => {
     test("should handle close events", () => {
       const handler = { close: mock(() => {}) };
-      ws.register("/chat", handler);
+      websocket.ws("/chat", handler);
       const wsInstance = mockWs("ws://localhost/chat");
 
-      ws["connections"].add(wsInstance);
-      ws.all().close(wsInstance, 1000, "Normal");
+      websocket["connections"].add(wsInstance);
+      websocket.getHandlers().close(wsInstance, 1000, "Normal");
 
       expect(handler.close).toHaveBeenCalled();
-      expect(ws["connections"].size).toBe(0);
+      expect(websocket["connections"].size).toBe(0);
+    });
+
+    test("should not throw if close handler is not defined", () => {
+      websocket.ws("/chat", {}); // No close handler
+
+      const wsInstance = mockWs("ws://localhost/chat");
+      websocket["connections"].add(wsInstance);
+      expect(websocket["connections"].size).toBe(1); // Ensures the connection has been added before closing
+
+      const action = () => websocket.getHandlers().close(wsInstance, 1000, "Normal");
+      expect(action).not.toThrow();
+      expect(websocket["connections"].size).toBe(0);
     });
 
     test("should handle drain events", () => {
       const handler = { drain: mock(() => {}) };
-      ws.register("/chat", handler);
+      websocket.ws("/chat", handler);
       const wsInstance = mockWs("ws://localhost/chat");
 
-      ws.all().drain(wsInstance);
+      websocket.getHandlers().drain(wsInstance);
       expect(handler.drain).toHaveBeenCalled();
+    });
+
+    test("should not throw if drain handler is not defined", () => {
+      websocket.ws("/chat", {}); // No drain handler
+      const wsInstance = mockWs("ws://localhost/chat");
+
+      const action = () => websocket.getHandlers().drain(wsInstance);
+      expect(action).not.toThrow();
     });
 
     test("should handle errors", () => {
       const handler = { error: mock(() => {}) };
-      ws.register("/chat", handler);
+      websocket.ws("/chat", handler);
       const wsInstance = mockWs("ws://localhost/chat");
       const testError = new Error("test");
 
-      ws.all().error(wsInstance, testError);
+      websocket.getHandlers().error(wsInstance, testError);
       expect(handler.error).toHaveBeenCalledWith(wsInstance, testError);
+    });
+
+    test("should not throw if error handler is not defined", () => {
+      websocket.ws("/chat", {}); // No error handler
+      const wsInstance = mockWs("ws://localhost/chat");
+      const testError = new Error("test");
+
+      const action = () => websocket.getHandlers().error(wsInstance, testError);
+      expect(action).not.toThrow();
     });
   });
 
@@ -139,9 +218,9 @@ describe("WebSocket", () => {
         }),
       };
 
-      typedWs.register("/user", handler);
+      typedWs.ws("/user", handler);
       const wsInstance = mockWs("ws://localhost/user");
-      typedWs.all().open(wsInstance);
+      typedWs.getHandlers().open(wsInstance);
 
       expect(handler.open).toHaveBeenCalled();
     });

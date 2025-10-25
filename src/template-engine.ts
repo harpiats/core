@@ -1,5 +1,7 @@
 import fs, { readFile } from "node:fs/promises";
 import path, { join } from "node:path";
+import { colorize } from "./utils/colorize";
+
 import type { Application } from "./server";
 import type { Engine } from "./types/engine";
 import type { Blocks, Data, Options, PluginFunction } from "./types/template-engine";
@@ -8,8 +10,8 @@ export class TemplateEngine implements Engine {
   private plugins: Record<string, PluginFunction> = {};
   private defaultViewName?: string;
   private viewsPath: string;
-  private layoutsPath: string;
-  private partialsPath: string;
+  private layoutsPath?: string;
+  private partialsPath?: string;
   private useModules: boolean;
   private currentModule: string | null = null;
   private fileExtension: string;
@@ -17,10 +19,13 @@ export class TemplateEngine implements Engine {
   constructor(options: Options) {
     this.viewsPath = options.path.views;
     this.layoutsPath = options.path.layouts;
-    this.partialsPath = options.path.partials;
+    this.partialsPath = options.path.components;
     this.defaultViewName = options.viewName;
     this.useModules = options.useModules ?? false;
     this.fileExtension = options.fileExtension ?? ".html";
+    this.plugins = {
+      raw: (str: any) => str,
+    };
   }
 
   public configure(app: Application): void {
@@ -39,26 +44,12 @@ export class TemplateEngine implements Engine {
     }
 
     const viewFilePath = await this.viewFilePathResolver(resolvedView);
-    const viewContent = await this.readFile(viewFilePath);
-    const layoutName = this.extractLayout(viewContent);
-    const { blocks, content: remainingView } = this.extractBlocks(viewContent);
+    const processedContent = await this.processContent(viewFilePath, data);
 
-    if (remainingView.trim() && !blocks.body) {
-      blocks.body = remainingView;
-    }
-
-    let finalContent = layoutName ? await this.applyLayout(layoutName, blocks) : remainingView;
-
-    finalContent = await this.processPartials(finalContent, data);
-    finalContent = await this.processInclude(finalContent, path.dirname(viewFilePath), data);
-    finalContent = this.processOperations(finalContent, data);
-    finalContent = this.interpolateVariables(finalContent, data);
-    finalContent = this.removeComments(finalContent);
-
-    return finalContent;
+    return this.minify(processedContent, "html");
   }
 
-  public async renderTemplate(viewPath: string, data: Data = {}): Promise<string> {
+  public async generate(viewPath: string, data: Data = {}): Promise<string> {
     try {
       const viewFilePath = path.join(process.cwd(), `${viewPath}${this.fileExtension}`);
       const absolutePath = path.resolve(viewFilePath);
@@ -69,23 +60,7 @@ export class TemplateEngine implements Engine {
         throw new Error(`No files found: ${absolutePath}`);
       }
 
-      const viewContent = await readFile(absolutePath, "utf-8");
-      const layoutName = this.extractLayout(viewContent);
-      const { blocks, content: remainingView } = this.extractBlocks(viewContent);
-
-      if (remainingView.trim() && !blocks.body) {
-        blocks.body = remainingView;
-      }
-
-      let finalContent = layoutName ? await this.applyLayout(layoutName, blocks) : remainingView;
-
-      finalContent = await this.processPartials(finalContent, data);
-      finalContent = await this.processInclude(finalContent, path.dirname(absolutePath), data);
-      finalContent = this.processOperations(finalContent, data);
-      finalContent = this.interpolateVariables(finalContent, data);
-      finalContent = this.removeComments(finalContent);
-
-      return finalContent;
+      return await this.processContent(absolutePath, data);
     } catch (_) {
       throw new Error("Error rendering template.");
     }
@@ -93,6 +68,67 @@ export class TemplateEngine implements Engine {
 
   public registerPlugin(name: string, fn: PluginFunction): void {
     this.plugins[name] = fn;
+  }
+
+  public minify(text: string, type: "html" | "generic" = "generic"): string {
+    if (type === "html") {
+      return text
+        .replace(/<!--[\s\S]*?-->/g, "")
+        .replace(/>\s+</g, "><")
+        .replace(/\s+/g, " ")
+        .replace(/\s+>/g, ">")
+        .replace(/>\s+/g, ">")
+        .trim();
+    }
+
+    return text
+      .replace(/^\s*[\r\n]/gm, "")
+      .replace(/[\r\n]{2,}/g, "\n")
+      .replace(/^[ \t]+/gm, "")
+      .replace(/[ \t]+$/gm, "")
+      .replace(/[ \t]+/g, " ")
+      .replace(/\s+([.,;:!?])/g, "$1")
+      .trim();
+  }
+
+  private async processContent(viewFilePath: string, data: Data): Promise<string> {
+    let viewContent = await this.readFile(viewFilePath);
+
+    // Initial processing
+    viewContent = this.removeComments(viewContent);
+
+    if (this.partialsPath) {
+      viewContent = await this.processPartials(viewContent, data);
+    }
+
+    viewContent = await this.processInclude(viewContent, path.dirname(viewFilePath), data);
+    viewContent = this.processOperations(viewContent, data);
+
+    if (!this.layoutsPath) {
+      viewContent = this.interpolateVariables(viewContent, data);
+
+      return viewContent;
+    }
+
+    // Layout and blocks processing
+    const extractedBlocks = await this.extractBlocks(viewContent);
+    if (!extractedBlocks) {
+      viewContent = this.interpolateVariables(viewContent, data);
+
+      return viewContent;
+    }
+
+    const { blocks, content: remainingView } = extractedBlocks;
+
+    if (remainingView.trim() && Object.keys(blocks).length === 0) {
+      blocks.body = remainingView;
+    }
+
+    const layoutContent = await this.processLayout(remainingView);
+    const contantWithLayout = this.layoutsPath ? await this.applyLayout(layoutContent, blocks) : remainingView;
+    const finalContent = this.interpolateVariables(contantWithLayout, data);
+
+    return finalContent;
   }
 
   private async viewFilePathResolver(templateName: string): Promise<string> {
@@ -157,44 +193,43 @@ export class TemplateEngine implements Engine {
   private async readFile(filePath: string): Promise<string> {
     try {
       return await readFile(filePath, "utf-8");
-    } catch (_) {
-      throw new Error("Error reading file.");
+    } catch (error) {
+      const message = colorize("#ff0000ff", `\nERROR: Unable to read file at ${filePath}\n`);
+      console.log(message);
+
+      throw new Error((error as Error).message);
     }
   }
 
-  private extractLayout(content: string): string | null {
-    const match = content.match(/{{=\s*layout\(["'](.+?)["']\)\s*}}/);
+  private async extractBlocks(content: string): Promise<{ blocks: Blocks; content: string } | undefined> {
+    const layoutRegex = /@layout\s*\(["'](.+?)["'](?:,\s*(.+?))?\)/g;
+    const isLayoutDefined = layoutRegex.test(content);
 
-    return match ? match[1] : null;
+    if (isLayoutDefined) {
+      const blocks: Blocks = {};
+      const blockRegex = /@block\(["'](.+?)["']\)\s*([\s\S]*?)@endblock/g;
+
+      const remainingContent = content.replace(blockRegex, (_, blockName, blockContent) => {
+        // if (blockContent.length > 10000) {
+        // 	throw new Error("Block content too large");
+        // }
+
+        blocks[blockName] = blockContent;
+        return "";
+      });
+
+      return { blocks, content: remainingContent };
+    }
   }
 
-  private extractBlocks(content: string): { blocks: Blocks; content: string } {
-    const blocks: Blocks = {};
-    const blockRegex = /{{=\s*block\(["'](.+?)["']\)\s*}}([\s\S]*?){{=\s*endblock\s*}}/g;
-
-    const remainingContent = content.replace(blockRegex, (_, blockName, blockContent) => {
-      // if (blockContent.length > 10000) {
-      // 	throw new Error("Block content too large");
-      // }
-
-      blocks[blockName] = blockContent;
-      return "";
-    });
-
-    return { blocks, content: remainingContent };
-  }
-
-  private async applyLayout(layoutName: string, blocks: Blocks): Promise<string> {
-    const layoutContent = await this.readFile(join(this.layoutsPath, `${layoutName}${this.fileExtension}`));
-
-    return layoutContent.replace(
-      /{{=\s*define\s+block\(["'](.+?)["']\)\s*}}/g,
-      (_, blockName) => blocks[blockName] || "",
-    );
+  private async applyLayout(layout: string, blocks: Blocks): Promise<string> {
+    return layout.replace(/@yield\s*\(["'](.+?)["']\)/g, (_, blockName) => blocks[blockName] || "");
   }
 
   private async processPartials(content: string, data: Data): Promise<string> {
-    const partialRegex = /{{=\s*partials?\(["'](.+?)["'](?:,\s*(.+?))?\)\s*}}/g;
+    if (!this.partialsPath) throw new Error("Component path is not defined.");
+
+    const partialRegex = /@component\(["'](.+?)["'](?:,\s*(.+?))?\)/g;
     const matches = [...content.matchAll(partialRegex)];
 
     for (const match of matches) {
@@ -211,7 +246,7 @@ export class TemplateEngine implements Engine {
   }
 
   private async processInclude(content: string, currentDir: string, data: Data): Promise<string> {
-    const includeRegex = /{{=\s*include\(["'](.+?)["'](?:,\s*(.+?))?\)\s*}}/g;
+    const includeRegex = /@import\(["'](.+?)["'](?:,\s*(.+?))?\)/g;
     const matches = [...content.matchAll(includeRegex)];
 
     for (const match of matches) {
@@ -228,6 +263,25 @@ export class TemplateEngine implements Engine {
     return content;
   }
 
+  private async processLayout(content: string): Promise<string> {
+    if (!this.layoutsPath) return content;
+
+    const regex = /@layout\s*\(["'](.+?)["'](?:,\s*(.+?))?\)/g;
+    const matches = [...content.matchAll(regex)];
+
+    for (const match of matches) {
+      const layoutName = match[1];
+      const params = match[2] ? this.evaluateExpression(match[2], {}) : {};
+
+      const layoutContent = await this.readFile(join(this.layoutsPath, `${layoutName}${this.fileExtension}`));
+      const processed = this.interpolateVariables(layoutContent, { ...params });
+
+      content = content.replace(match[0], processed);
+    }
+
+    return content;
+  }
+
   private processOperations(content: string, data: Data): string {
     content = this.extractVariables(content, data);
     content = this.processLoops(content, data);
@@ -237,49 +291,92 @@ export class TemplateEngine implements Engine {
   }
 
   private extractVariables(content: string, data: Data): string {
-    return content.replace(/{{~\s*var\s+(\w+)\s*=\s*(.+?)\s*}}/g, (_, varName, value) => {
+    const blockRegex = /@set\s+(\w+)\s*=\s*([\s\S]*?)@endset/g;
+
+    content = content.replace(blockRegex, (_, varName, blockContent) => {
       try {
-        data[varName] = this.evaluateExpression(value, data);
+        data[varName] = this.evaluateExpression(blockContent.trim(), data);
       } catch (error) {
-        console.error(`Error evaluating expression: ${value}`, error);
+        console.error(`Error evaluating block expression: ${blockContent}`, error);
         data[varName] = "";
       }
       return "";
     });
+
+    return content;
   }
 
   private processConditionals(content: string, data: Data): string {
-    return content.replace(
-      /{{~\s*if\s*\((.+?)\)\s*}}\s*([\s\S]*?)\s*({{~\s*else\s*}}\s*([\s\S]*?)\s*)?{{~\s*endif\s*}}/g,
-      (_, condition, ifBlock, _elseBlock, elseContent) => {
-        // Try to resolve as plugin
-        const pluginResult = this.callPlugin(condition, data);
-        if (pluginResult !== undefined && pluginResult !== null) {
-          return pluginResult ? ifBlock : elseContent || "";
-        }
+    const conditionalRegex = /@if\s+([^\n@]+)([\s\S]*?)@endif/g;
 
-        // If not plugin, evaluates as normal expression
-        const conditionResult = this.evaluateExpression(condition, data);
-        return conditionResult ? ifBlock : elseContent || "";
-      },
-    );
+    return content.replace(conditionalRegex, (_match, condition, blocks) => {
+      // Split the blocks into if, elseif, and else parts
+      const blockParts = blocks.split(/(?=@else(?:if[^\n@]+)?)/);
+
+      let ifBlock = "";
+      let elseBlock = "";
+      const elseifBlocks: Array<{ condition: string; content: string }> = [];
+
+      // Parse all blocks
+      for (const part of blockParts) {
+        if (part.startsWith("@elseif")) {
+          const elseifMatch = part.match(/@elseif\s+([^\n@]+)([\s\S]*)/);
+          if (elseifMatch) {
+            elseifBlocks.push({
+              condition: elseifMatch[1],
+              content: elseifMatch[2],
+            });
+          }
+        } else if (part.startsWith("@else")) {
+          elseBlock = part.replace(/@else\s*/, "");
+        } else {
+          ifBlock = part;
+        }
+      }
+
+      // Check main condition
+      let pluginResult = this.callPlugin(condition, data);
+      if (pluginResult !== undefined && pluginResult !== null) {
+        if (pluginResult) return this.processConditionals(ifBlock, data);
+      } else if (this.evaluateExpression(condition, data)) {
+        return this.processConditionals(ifBlock, data);
+      }
+
+      // Check elseif conditions
+      for (const elseif of elseifBlocks) {
+        pluginResult = this.callPlugin(elseif.condition, data);
+        if (pluginResult !== undefined && pluginResult !== null) {
+          if (pluginResult) return this.processConditionals(elseif.content, data);
+        } else if (this.evaluateExpression(elseif.condition, data)) {
+          return this.processConditionals(elseif.content, data);
+        }
+      }
+
+      // Return else block
+      return elseBlock ? this.processConditionals(elseBlock, data) : "";
+    });
   }
 
   private processLoops(content: string, data: Data): string {
-    return content.replace(
-      /{{~\s*for\s+(?:\[(\w+),\s*(\w+)\]|(\w+))\s+in\s+(.+?)\s*}}([\s\S]*?){{~\s*endfor\s*}}/g,
-      (_, keyName, valueName, itemName, listName, blockContent) => {
-        const list = this.evaluateExpression(listName, data) || [];
-        if (keyName && valueName) {
-          return Object.entries(list)
-            .map(([key, value]) =>
-              this.processBlockContent(blockContent, { ...data, [keyName]: key, [valueName]: value }),
-            )
-            .join("");
-        }
-        return list.map((item: any) => this.processBlockContent(blockContent, { ...data, [itemName]: item })).join("");
-      },
-    );
+    const loopRegex = /@for\s+(?:\[(\w+),\s*(\w+)\]|(\w+))\s+in\s+(.+?)\n([\s\S]*?)@endfor/g;
+
+    return content.replace(loopRegex, (_match, keyName, valueName, itemName, listName, blockContent) => {
+      const list = this.evaluateExpression(listName, data) || [];
+
+      if (keyName && valueName) {
+        // Object iteration - [key, value] in object
+        return Object.entries(list)
+          .map(([key, value]) =>
+            this.processBlockContent(blockContent.trim(), { ...data, [keyName]: key, [valueName]: value }),
+          )
+          .join("");
+      } else {
+        // Array iteration - item in array
+        return list
+          .map((item: any) => this.processBlockContent(blockContent.trim(), { ...data, [itemName]: item }))
+          .join("");
+      }
+    });
   }
 
   private processBlockContent(content: string, data: Data): string {
@@ -293,12 +390,54 @@ export class TemplateEngine implements Engine {
   }
 
   private interpolateVariables(content: string, data: Data): string {
-    content = content.replace(/{{{\s*(.+?)\s*}}}/gs, (_, expression) => {
-      return this.processExpression(expression, data, false);
+    content = this.checkAndWarn(content);
+
+    content = content.replace(/{{\s*raw\(([\s\S]*?)\)\s*}}/gs, (_, innerExpression) => {
+      return this.processExpression(innerExpression, data, false);
     });
 
-    content = content.replace(/{{\s*(.+?)\s*}}/gs, (_, expression) => {
+    content = content.replace(/{{(?![{])[\s]*(.+?)[\s]*}}/gs, (_, expression) => {
       return this.processExpression(expression, data, true);
+    });
+
+    return content;
+  }
+
+  private checkAndWarn(content: string) {
+    content = content.replace(/@layout\s*\(["'](.+?)["'](?:,\s*(.+?))?\)/g, () => {
+      if (!this.layoutsPath) {
+        const message = colorize("#FFA500", "WARNING: You're trying to use a layout, but layout path is not defined.");
+
+        console.log(message);
+      }
+
+      return "";
+    });
+
+    content = content.replace(/@block\(["'](.+?)["']\)\s*([\s\S]*?)@endblock/g, (string) => {
+      if (!this.layoutsPath) {
+        const message = colorize(
+          "#FFA500",
+          "WARNING: You're trying to use a layout block, but layout path is not defined.",
+        );
+
+        console.log(message);
+      }
+
+      return string.replace(/@block\(["'][^"']+["']\)/g, "").replace(/@endblock/g, "");
+    });
+
+    content = content.replace(/@component\(["'](.+?)["'](?:,\s*(.+?))?\)/g, () => {
+      if (!this.layoutsPath) {
+        const message = colorize(
+          "#FFA500",
+          "WARNING: You're trying to use a component, but components path is not defined.",
+        );
+
+        console.log(message);
+      }
+
+      return "";
     });
 
     return content;
@@ -325,8 +464,11 @@ export class TemplateEngine implements Engine {
       if (evaluated !== undefined && evaluated !== null) {
         return shouldEscape ? this.escapeHtml(evaluated) : evaluated;
       }
-    } catch {
-      // If the expression fails, it returns an empty string.
+    } catch (error) {
+      console.log(colorize("#FFA500", `[Template Engine] Expression evaluation failed: "${expression}"`));
+      console.log(colorize("#ff0000ff", `[Template Engine] Error: ${error instanceof Error ? error.message : error}`));
+
+      return "";
     }
 
     return "";

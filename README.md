@@ -74,6 +74,67 @@ app.listen({
 }, () => console.log("Server is running at http://localhost:3000/"));
 ```
 
+### Server configuration
+A Harpia application starts with the `app.listen()` method, which accepts a configuration object of type `ServerOptions`.
+This object defines how the HTTP and WebSocket servers behave, including port, host, TLS settings, and connection performance options.
+
+#### Example
+
+```typescript
+import harpia from "harpia";
+
+const app = harpia();
+
+app.listen({
+  port: 3000,
+  development: true,
+  reusePort: true,
+  hostname: "localhost",
+}, () => console.log("Server is running at http://localhost:3000/"));
+```
+
+---
+
+### `ServerOptions` Reference
+
+| Property                 | Type                      | Description                                                                                                                             |
+| ------------------------ | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| **`port`**               | `number` *(optional but required if `unix` is not set)*     | The TCP port the server will listen on.                                                             |
+| **`development`**        | `boolean` *(optional)*    | Enables development mode, which may include detailed error messages, automatic restarts, and verbose logging.                           |
+| **`hostname`**           | `string` *(optional)*     | The hostname or IP address where the server should bind. Defaults to `"0.0.0.0"` (all interfaces).                                      |
+| **`tls`**                | `TLSOptions` *(optional)* | Enables HTTPS by providing TLS/SSL configuration (e.g., `cert`, `key`). When present, the server will start over HTTPS instead of HTTP. |
+| **`unix`**               | `string` *(optional but required if `port` is not set)*     | Path to a Unix domain socket file. If specified, the server will listen on this socket instead of a TCP port.                           |
+| **`reusePort`**          | `boolean` *(optional)*    | When `true`, allows multiple processes to listen on the same port. Useful for load balancing across workers.                            |
+| **`maxRequestBodySize`** | `number` *(optional)*     | Maximum size (in bytes) of an incoming HTTP request body. Requests exceeding this limit will be rejected.                               |
+| **`ws`** | `object` *(optional)* | Defines advanced options for WebSocket behavior and resource limits |
+
+---
+
+#### WebSocket Configuration (`ServerOptions.ws`)
+
+The `ws` property defines advanced options for WebSocket behavior and resource limits.
+
+| Property                           | Type                   | Description                                                                                                                |
+| ---------------------------------- | ---------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| **`maxPayloadLength`**             | `number` *(optional)*  | Maximum size (in bytes) allowed for an incoming WebSocket message. Messages exceeding this limit will be dropped.          |
+| **`idleTimeout`**                  | `number` *(optional)*  | Time in seconds a WebSocket connection can stay idle before being automatically closed.                                    |
+| **`backpressureLimit`**            | `number` *(optional)*  | The maximum amount of unsent data (in bytes) a WebSocket can buffer before triggering backpressure handling.               |
+| **`closeOnBackpressureLimit`**     | `boolean` *(optional)* | When `true`, the server will automatically close connections that exceed the backpressure limit.                           |
+| **`sendPings`**                    | `boolean` *(optional)* | When `true`, the server will automatically send periodic ping frames to connected clients to detect broken connections.    |
+| **`publishToSelf`**                | `boolean` *(optional)* | Determines whether messages published to a channel are also delivered to the sender. Useful for broadcast implementations. |
+| **`perMessageDeflate`**            | `object` *(optional)*  | Controls compression for WebSocket messages using the `permessage-deflate` extension.                                      |
+| **`perMessageDeflate.compress`**   | `boolean` *(optional)* | Enables compression for outgoing WebSocket messages.                                                                       |
+| **`perMessageDeflate.decompress`** | `boolean` *(optional)* | Enables decompression for incoming WebSocket messages.                                                                     |
+
+---
+
+#### Notes
+
+* If both `port` and `unix` are provided, the server will prefer the **Unix socket**.
+* WebSocket options (`ws`) apply globally to all routes using `app.ws()` or `router.ws()`.
+* TLS options must include valid certificate and private key paths for secure HTTPS/WebSocket connections.
+* `reusePort` is typically used in production setups with multiple workers or clustered processes.
+
 ### Route management
 
 Creating a route in a different file.
@@ -98,6 +159,64 @@ const books = Router("books");
 books.get("/", () => console.log("Books route"));
 
 export default books;
+```
+
+Creating a websocket route
+
+```typescript
+import { Router } from "harpia";
+
+const routes = Router();
+
+// Define a custom type for WebSocket connection data
+type CustomWebSocketData = {
+  userId: string;
+  username: string;
+  sessionId: string;
+};
+
+// Create a WebSocket route for the chat
+routes.ws<CustomWebSocketData>("/chat", {
+  // Called when a new WebSocket connection is opened
+  open(ws) {
+    const data = ws.data;
+
+    console.log("New WebSocket connection opened on /chat");
+
+    // Set custom data for this connection
+    data.userId = "123";
+    data.username = "Alice";
+    data.sessionId = "abc";
+
+    ws.send(`Welcome to the chat, ${data.username}!`);
+  },
+
+  // Called when a message is received from the client
+  message(ws, message) {
+    const data = ws.data;
+    console.log(`Message received from ${data.username}: ${message}`);
+  },
+
+  // Called when the WebSocket connection is closed
+  close(ws, code, reason) {
+    const data = ws.data;
+    console.log(`Connection closed (${code}) by ${data.username}: ${reason}`);
+  },
+
+  // Called when the socket is ready to send more data
+  drain(ws) {
+    const data = ws.data;
+    console.log(`Socket for ${data.username} is ready to send data`);
+  },
+
+  // Called when an error occurs on the WebSocket connection
+  error(ws, error) {
+    const data = ws.data;
+    console.error(`Error on ${data.username}'s connection:`, error);
+  },
+});
+
+export default routes;
 ```
 
 Import the route into the main application.
@@ -157,6 +276,49 @@ export default books;
 ### Web Socket
 You can define a route and a custom data for each WebSocket connection and implement handlers for events like connection opening, message reception, connection closing, and errors.
 
+
+You can define **WebSocket routes** that handle events for real-time connections.
+Each connection creates its own `ServerWebSocket` instance, which can hold **custom connection data** using the `ws.data` property.
+
+You can create WebSocket routes using either the **application instance (`app`)** or a **router instance (`Router`)**:
+
+```typescript
+import { Router } from "harpia";
+
+const routes = Router();
+
+routes.ws("/chat", { /** handlers */ });
+```
+
+or
+
+```typescript
+import harpia from "harpia";
+
+const app = harpia();
+
+app.ws("/chat", { /** handlers */ });
+```
+
+---
+
+#### Supported Handlers
+
+| Handler                       | Description                                                                                                             |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| **`open(ws)`**                | Called when a new WebSocket connection is successfully opened.                                                          |
+| **`message(ws, message)`**    | Called whenever a message is received from the client. The `message` can be a `string`, `ArrayBuffer`, or `Uint8Array`. |
+| **`close(ws, code, reason)`** | Called when the connection is closed. Receives the close code and an optional reason message.                           |
+| **`drain(ws)`**               | Called when the socket is ready to receive more data (after backpressure is relieved).                                  |
+| **`error(ws, error)`**        | Called when an error occurs on the WebSocket connection (e.g., failure to send data).                                   |
+
+---
+
+#### Example with Custom Connection Data
+
+You can define a custom data type for each WebSocket connection using `ws.data`.
+This is useful for storing user info, session data, or connection-specific context.
+
 ```typescript
 // Define a custom type for WebSocket connection data
 type CustomWebSocketData = {
@@ -165,16 +327,19 @@ type CustomWebSocketData = {
   sessionId: string;
 };
 
-// Create a WebSocket route for chat
+// Create a WebSocket route for the chat
 app.ws<CustomWebSocketData>("/chat", {
   // Called when a new WebSocket connection is opened
   open(ws) {
     const data = ws.data;
 
-    console.log("New WebSocket connection opened at /chat");
-    data.userId = "123"; // Set custom data
+    console.log("New WebSocket connection opened on /chat");
+
+    // Set custom data for this connection
+    data.userId = "123";
     data.username = "Alice";
     data.sessionId = "abc";
+
     ws.send(`Welcome to the chat, ${data.username}!`);
   },
 
@@ -185,18 +350,34 @@ app.ws<CustomWebSocketData>("/chat", {
   },
 
   // Called when the WebSocket connection is closed
-  close(ws, code, message) {
+  close(ws, code, reason) {
     const data = ws.data;
-    console.log(`Connection closed: ${data.username}`);
+    console.log(`Connection closed (${code}) by ${data.username}: ${reason}`);
   },
 
-  // Called when an error occurs in the WebSocket connection
+  // Called when the socket is ready to send more data
+  drain(ws) {
+    const data = ws.data;
+    console.log(`Socket for ${data.username} is ready to send data`);
+  },
+
+  // Called when an error occurs on the WebSocket connection
   error(ws, error) {
     const data = ws.data;
-    console.error(`Error in connection for ${data.username}:`, error);
+    console.error(`Error on ${data.username}'s connection:`, error);
   },
 });
 ```
+
+#### Key Notes
+
+* `ws.data` is **persistent** for the entire lifetime of a connection — each connected client has its own data object.
+* You can **send messages** with `ws.send("text")` or send binary data (`Uint8Array`).
+* To **broadcast messages to all connected clients**, keep a global list of open connections and iterate through them.
+* The `error` handler is optional but highly recommended in production environments.
+* Harpia provides native WebSocket integration — no additional libraries like `ws` or `socket.io` are required for basic functionality.
+
+
 
 ### Static Files
 To serve static files, you need to create a folder for them—e.g., `public`.
@@ -269,13 +450,14 @@ import { TemplateEngine } from "harpiats/template-engine";
 
 const baseDir = process.cwd();
 
-export const html = new TemplateEngine({
+export const engine = new TemplateEngine({
   viewName: "page", // page.html will be rendered
   useModules: false, // true if uses a module structure (e.g. modules/users/pages/home/page.html)
+  fileExtension: ".html", // The default is `.html`, but you can use `.txt`, `.hml`, or any other.
   path: {
     views: path.join(baseDir, "src", "resources", "pages"),
-    layouts: path.join(baseDir, "src", "resources", "layouts"),
-    partials: path.join(baseDir, "src", "resources", "partials"),
+    layouts: path.join(baseDir, "src", "resources", "layouts"), // optional
+    components: path.join(baseDir, "src", "resources", "components"), // optional
   },
 });
 ```
@@ -284,10 +466,10 @@ And set up the application to use the engine:
 
 ```typescript
 import harpia from "harpiats";
-import { html } from "app/config/template-engine";
+import { engine } from "app/config/template-engine";
 
 const app = harpia();
-html.configure(app);
+engine.configure(app);
 
 app.get("/books", async (req, res) => {
   await res.render("home", { title: "Books" });
@@ -303,13 +485,14 @@ import { TemplateEngine } from "harpiats/template-engine";
 
 const baseDir = process.cwd();
 
-export const html = new TemplateEngine({
+export const engine = new TemplateEngine({
   viewName: "page", // page.html will be rendered
   useModules: true, // true if uses a module structure (e.g. modules/users/pages/home/page.html)
+  fileExtension: ".html", // The default is `.html`, but you can use `.txt`, `.hml`, or any other.
   path: {
     views: path.join(baseDir, "modules", "**", "pages"),
     layouts: path.join(baseDir, "resources", "layouts"),
-    partials: path.join(baseDir, "resources", "partials"),
+    components: path.join(baseDir, "resources", "components"),
   },
 });
 ```
@@ -318,10 +501,10 @@ And set up the application to use the engine:
 
 ```typescript
 import harpia from "harpiats";
-import { html } from "app/config/template-engine";
+import { engine } from "app/config/template-engine";
 
 const app = harpia();
-html.configure(app);
+engine.configure(app);
 
 app.get("/books", async (req, res) => {
   await res.module("books").render("home", { title: "Books" });
@@ -333,14 +516,14 @@ app.listen...
 It is also possible to render a template from its path, regardless of where it is in the application. To do this, we can follow the example:
 ```typescript
 import harpia from "harpiats";
-import { html } from "app/config/template-engine";
+import { engine } from "app/config/template-engine";
 
 const app = harpia();
-html.configure(app);
+engine.configure(app);
 
 app.post("/send-email", async (req, res) => {
   const data = {}
-  const content = await html.renderTemplate("app/services/mailer/templates/account-created", { data });
+  const content = await engine.generate("app/services/mailer/templates/account-created", { data });
 
   console.log(content);
 });
@@ -348,66 +531,85 @@ app.post("/send-email", async (req, res) => {
 app.listen...
 ```
 
-**Harpia Tempate Engine Syntax**
-- Use html files.
-- To use a layout: `{{= layout('default') }}`
-- To use variables: `{{ title }}`.
-- To define a block: `{{= define block("body") }}`.
-- To insert code into a block: `{{= block('body') }} <h1>{{ message  }}</h1> {{= endblock }}`.
-- To include a file `{{= include('welcome', { message: 'Custom message.' }) }}`.
-- To use a partial `{{= partial('card', { name: 'Product A', price: 99.87 }) }}`.
-- To use a comment `## This is a comment`;
-- To define a variable: `{{~ var title = "Homepage" }}`.
-- To use if conditions:
-  ```html
-  {{~ if(isActive) }} <p>User is active.</p> {{~ endif }}
+#### Harpia Template Engine Syntax Overview
 
-  {{~ if(isActive) }}
-    <p>User is active.</p>
-  {{~ else }}
-    <p>User is not active.</p>
-  {{~ endif }}
+| Type                          | Syntax                                            | Description                                                                | Example                                                                 |
+| ------------------------------ | ------------------------------------------------ | -------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| **Variable / Output**          | `{{ expr }}`                                     | Inserts the result of an expression into the template.                     | `<h1>{{ title }}</h1>`                                                  |
+| **Plugin / Function**          | `{{ fn(arg1, arg2) }}`                           | Calls a registered plugin or function and inserts its result.              | `<p>{{ uppercase(username) }}</p>`                                      |
+| **Local Assignment**           | `@set var = value @endset`                       | Declares a local variable available within the template scope.             | `@set name = "Lucas" @endset\n<p>{{ name }}</p>`                        |
+| **Conditional**                | `@if condition ... @elseif ... @else ... @endif` | Defines conditional logic with optional branches.                          | `@if isAdmin\n  <p>Admin</p>\n@else\n  <p>User</p>\n@endif`             |
+| **Array Loop**                 | `@for item in items ... @endfor`                 | Iterates over an array; `item` represents the current element.             | `@for item in items\n  <li>{{ item }}</li>\n@endfor`                    |
+| **Object Loop**                | `@for [key, value] in obj ... @endfor`           | Iterates over key/value pairs in an object.                                | `@for [k, v] in obj\n  <li>{{ k }}: {{ v }}</li>\n@endfor`              |
+| **Layout / Inheritance**       | `@layout("default", { key: value })`             | Defines the base layout and optionally passes static parameters.           | `@layout("default", { title: "Homepage" })`                             |
+| **Block Placeholder**          | `@yield("block_name")`                           | Defines a placeholder inside the layout for injected content.              | `<body>\n  @yield("content")\n</body>`                                  |
+| **Content Block**              | `@block("block_name") ... @endblock`             | Defines the content for a named block to be inserted into a layout.        | `@block("content")\n  <h1>Hello</h1>\n@endblock`                        |
+| **Import/Include**             | `@import("component", { key: value })`           | Includes another template relative to the current view, with props.        | `@import("button", { text: "Save" })`                                   |
+| **Partial/Component**          | `@component("name", { key: value })`             | Includes a reusable component from the components directory.               | `@component("header", { user: currentUser })`                           |
+| **Comment**                    | `## comment`                                     | Defines a comment line that is not rendered in the final HTML.             | `## This is a comment`                                                  |
 
-  <p>{{ isActive ? 'Active' : 'Inactive' }}</p>
-  ```
+#### Plugin Usage Example:
 
-  - To use for loops:
-  ```html
-  {{~ for num in numbers }}
-    <p>Number: {{ num }}</p>
-  {{~ endfor }}
+```typescript
+import path from "node:path";
+import { TemplateEngine } from "harpiats/template-engine";
 
-  {{~ for [key, value] in products }}
-    <p>Product {{ key }}: {{ value.name }} - $ {{ value.price }}</p>
-  {{~ endfor }}
-  ```
+const baseDir = process.cwd();
 
-- To register a plugin, in the template-engine.ts file:
-  ```typescript
-    import path from "node:path";
-    import { TemplateEngine } from "harpiats/template-engine";
+export const engine = new TemplateEngine({
+  viewName: "page",
+  useModules: false,
+  fileExtension: ".html",
+  path: {
+    views: path.join(baseDir, "src", "resources", "pages"),
+    layouts: path.join(baseDir, "src", "resources", "layouts"),
+    components: path.join(baseDir, "src", "resources", "components"),
+  },
+});
 
-    const baseDir = process.cwd();
-
-    export const html = new TemplateEngine({
-      viewName: "page",
-      useModules: false,
-      path: {
-        views: path.join(baseDir, "src", "resources", "pages"),
-        layouts: path.join(baseDir, "src", "resources", "layouts"),
-        partials: path.join(baseDir, "src", "resources", "partials"),
-      },
-    });
-
-    html.registerPlugin("uppercase", (str: string) => str.toUpperCase());
-    html.registerPlugin("sum", (a: number, b: number) => a + b);
-  ```
+// Register custom plugins
+engine.registerPlugin("uppercase", (str: string) => str.toUpperCase());
+engine.registerPlugin("sum", (a: number, b: number) => a + b);
+```
 
 and in the .html file:
-  ```html
-    <p>Uppercase plugin: {{{ uppercase(user.name) }}}</p>
-    <p>Sum plugin: {{{ sum(10, 20) }}}</p>
-  ```
+```html
+  <p>Uppercase plugin: {{ uppercase(user.name) }}</p>
+  <p>Sum plugin: {{ sum(10, 20) }}</p>
+```
+
+#### Layout Example
+
+Layout name: default.html
+```html
+<html>
+  <head>
+    <title>{{ title }}</title>
+  </head>
+  <body>
+    @yield("content")
+  </body>
+</html>
+```
+
+View:
+```html
+@layout("default", { title: "Homepage" })
+
+@block("content")
+  <h1>Welcome, {{ user.name }}!</h1>
+  <p>{{ uppercase("this page uses the default layout.") }}</p>
+@endblock
+```
+
+#### Unescaped Content
+
+Using the `raw(...)` plugin, you can add content without escaping.
+
+```html
+<p>{{ raw("<script>alert('xss')</script>") }}</p>
+```
+
 ### Method Override
 The Method Override technique is commonly used to simulate HTTP methods like `PUT`, `DELETE`, and `PATCH` in web applications where the client (e.g., browsers) may not natively support these methods. This is particularly useful when working with HTML forms, which only support `GET` and `POST` methods.
 
@@ -1354,4 +1556,3 @@ This integration provides a persistent session management system backed by Redis
 ## Authors
 
 - [@lucasnjsilva](https://www.github.com/lucasnjsilva)
-
