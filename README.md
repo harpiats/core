@@ -26,6 +26,7 @@ Table of Contents
   - [Cookies](#cookies)
   - [Cache](#cache)
   - [Session](#session)
+  - [CSRF](#csrf)
   - [Upload](#upload)
   - [Request Monitor](#request-monitor)
   - [Security Headers (Shield)](#security-headers-shield)
@@ -1022,6 +1023,99 @@ app.get("/set-cookie", (req, res) => {
 ```
 
 In this example, the session cookie is set with options that make it HTTP-only (not accessible via JavaScript) and secure (only sent over HTTPS). The `maxAge` option is also set to define how long the cookie should last (in seconds).
+
+### CSRF
+
+The `CSRF` class provides a simple and lightweight mechanism for generating and validating CSRF (Cross-Site Request Forgery) tokens tied to user sessions. It includes built-in token expiration and supports either a custom store or a default in-memory store.
+
+#### Setup
+
+```ts
+import { CSRF } from "harpiats/csrf";
+import { MemoryStore } from "harpiats/memory-store";
+
+const csrf = new CSRF({
+  store: new MemoryStore(),
+  ttl: 10 * 60 * 1000, // 10 minutes
+});
+````
+
+**Parameters:**
+
+* `store` *(optional)* — Custom store implementing the `Store` interface. Defaults to `MemoryStore`.
+* `ttl` *(optional)* — Token lifetime in milliseconds. Defaults to 5 minutes (`5 * 60 * 1000`).
+
+#### Methods
+
+##### `generate(sessionId: string): Promise<string>`
+
+Generates a new CSRF token for the specified session ID.
+If a token already exists for the session, it will be replaced.
+
+**Example:**
+
+```ts
+const token = await csrf.generate("user-session-123");
+console.log(token); // e.g. "a1b2c3d4..."
+```
+
+##### `check(sessionId: string, token: string): Promise<boolean>`
+
+Validates a CSRF token for a given session ID.
+Returns `true` if the token matches and is not expired; otherwise returns `false`.
+
+**Parameters:**
+
+* `sessionId`: The session identifier.
+* `token`: The token to validate.
+
+**Example:**
+
+```ts
+const isValid = await csrf.check("user-session-123", token);
+console.log(isValid); // true or false
+```
+
+##### `delete(sessionId: string): Promise<void>`
+
+Deletes the CSRF token associated with the specified session ID.
+
+**Example:**
+
+```ts
+await csrf.delete("user-session-123");
+```
+
+#### Basic Usage
+
+```ts
+const csrf = new CSRF();
+
+// Step 1: Generate a token for the user's session
+const sessionId = "session-001";
+const token = await csrf.generate(sessionId);
+
+// Step 2: Send the token to the client (e.g., as a hidden form field)
+
+// Step 3: When the client submits a form, verify the token
+const isValid = await csrf.check(sessionId, token);
+
+if (isValid) {
+  console.log("CSRF token is valid. Proceed with request.");
+} else {
+  console.log("Invalid or expired CSRF token.");
+}
+
+// Step 4: Optionally delete the token after use
+await csrf.delete(sessionId);
+```
+
+#### Notes
+
+* Tokens expire automatically based on the configured TTL.
+* Always use HTTPS and proper session handling in production environments.
+* The default `MemoryStore` is intended for testing or small applications; for distributed or persistent setups, use a custom store.
+
 
 ### Upload
 You can set up a middleware to manage single or multiple file uploads, specifying options like allowed file types, extensions, and maximum file size.
