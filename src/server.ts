@@ -21,7 +21,7 @@ import type { WebSocketHandlers } from "./types/websocket";
 
 export class Application {
   private static instance: Application | null = null;
-  private serverInstance: Server | null = null;
+  private serverInstance: Server<unknown> | null = null;
   private ipAdress: string | null = null;
 
   private router: Router;
@@ -30,7 +30,7 @@ export class Application {
   private notFound: NotFoundTypes = null;
   private staticPath: string | null = null;
   private templateEngine: Engine | null = null;
-  private websocket: WebSocket;
+  private websocket: WebSocket<unknown>;
 
   public engine = {
     set: (engine: Engine) => this.setTemplateEngine(engine),
@@ -114,7 +114,7 @@ export class Application {
     }
   }
 
-  public server(): Server {
+  public server(): Server<unknown> {
     if (!this.serverInstance) {
       throw new Error("Server is not running.");
     }
@@ -122,7 +122,7 @@ export class Application {
     return this.serverInstance;
   }
 
-  private setRequestIP(req: FetchRequest, server: Server): void {
+  private setRequestIP(req: FetchRequest, server: Server<unknown>): void {
     this.ipAdress = server.requestIP(req)?.address || null;
   }
 
@@ -245,7 +245,7 @@ export class Application {
     return method;
   }
 
-  private async handleRequest(req: FetchRequest, server?: Server): Promise<FetchResponse> {
+  private async handleRequest(req: FetchRequest, server?: Server<unknown>): Promise<FetchResponse> {
     if (server) {
       this.setRequestIP(req, server);
     }

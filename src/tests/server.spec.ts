@@ -122,7 +122,7 @@ describe("Server", () => {
   describe("ws", () => {
     it("should register a websocket route", () => {
       const registerSpy = spyOn((app as any).websocket, "ws");
-      const handlers = { open: () => {}, message: () => {}, close: () => {} };
+      const handlers = { open: () => {}, message: () => {}, close: () => {}, drain: () => {}, error: () => {} };
       app.ws("/ws", handlers);
 
       expect(registerSpy).toHaveBeenCalledWith("/ws", handlers);
@@ -171,9 +171,10 @@ describe("Server", () => {
     it("should register routes", () => {
       const registerSpy = spyOn((app as any).router, "register");
       const router = new Router();
+      const handlers = { open: () => {}, message: () => {}, close: () => {}, drain: () => {}, error: () => {} };
 
       router.get("/test", () => {});
-      router.ws("/ws", { open: () => {}, message: () => {}, close: () => {} });
+      router.ws("/ws", handlers);
 
       app.routes(router);
       expect(registerSpy).toHaveBeenCalled();
