@@ -4,7 +4,7 @@
   "type": "module",
   "bin": "./index.ts",
   "license": "Apache-2.0",
-  "version": "1.0.0-beta.13",
+  "version": "1.0.0-beta.14",
   "scripts": {
     "commit": "cz",
     "tests": "bun cmd.ts tests",
@@ -51,7 +51,8 @@
     "./shield": "./src/shield.ts",
     "./monitor": "./src/monitor.ts",
     "./memory-store": "./src/memory-store.ts",
-    "./template-engine": "./src/template-engine.ts"
+    "./template-engine": "./src/template-engine.ts",
+    "./csrf": "./src/csrf.ts"
   },
   "config": {
     "commitizen": {
