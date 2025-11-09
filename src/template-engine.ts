@@ -195,7 +195,10 @@ export class TemplateEngine implements Engine {
       return await readFile(filePath, "utf-8");
     } catch (error) {
       const message = colorize("#ff0000ff", `\nERROR: Unable to read file at ${filePath}\n`);
-      console.log(message);
+
+      if (process.env.NODE_ENV !== "test") {
+        console.log(message);
+      }
 
       throw new Error((error as Error).message);
     }
