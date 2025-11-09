@@ -25,6 +25,11 @@
 				"noExplicitAny": "off",
 				"noConfusingVoidType": "off"
 			},
+			"correctness": {
+				"noUnusedVariables": "off",
+				"noUnusedPrivateClassMembers": "off",
+				"noUnusedFunctionParameters": "warn"
+			},
 			"complexity": {
 				"noBannedTypes": "off",
 				"noUselessConstructor": "off",
