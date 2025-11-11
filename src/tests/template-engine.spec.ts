@@ -18,6 +18,7 @@ beforeEach(async () => {
   await mkdir(join(TEST_DIR, "views/admin"), { recursive: true });
   await mkdir(join(TEST_DIR, "layouts"), { recursive: true });
   await mkdir(join(TEST_DIR, "components"), { recursive: true });
+  await mkdir(join(TEST_DIR, "components/includes"), { recursive: true });
 });
 
 afterEach(async () => {
@@ -77,6 +78,11 @@ describe("TemplateEngine", () => {
     beforeEach(async () => {
       await createTestFile(
         "layouts/base.html",
+        `<html><head><title></title></head><body>@yield('content')</body></html>`,
+      );
+
+      await createTestFile(
+        "layouts/base-params.html",
         `<html><head><title>{{ title }}</title></head><body>@yield('content')</body></html>`,
       );
 
@@ -91,7 +97,7 @@ describe("TemplateEngine", () => {
       await createTestFile(
         "views/page-params.html",
         `
-        @layout('base', { title: "Homepage" })
+        @layout('base-params', { title: "Homepage" })
         @block('content')Hello@endblock
       `,
       );
@@ -146,6 +152,115 @@ describe("TemplateEngine", () => {
       const engine = createTestEngine();
       const result = await engine.render("page");
       expect(result).toContain("<footer>Footer Value</footer>");
+    });
+
+    test("should process @component containing @import", async () => {
+      await createTestFile("components/includes/inner.html", `<span>{{ text }}</span>`);
+      await createTestFile(
+        "components/wrapper.html",
+        `
+        <div class="wrapper">
+          @import('includes/inner')
+        </div>
+      `,
+      );
+
+      await createTestFile("views/page.html", `@component('wrapper', { text: "Hello Import" })`);
+
+      const engine = createTestEngine();
+      const result = await engine.render("page");
+
+      expect(result).toContain(`<div class="wrapper">`);
+      expect(result).toContain("<span>Hello Import</span>");
+    });
+
+    test("should process nested components with internal @set", async () => {
+      await createTestFile(
+        "components/child.html",
+        `
+        @set msg = "Inner Component" @endset
+        <p>{{ msg }}</p>
+      `,
+      );
+
+      await createTestFile(
+        "components/parent.html",
+        `
+        <div class="parent">
+          @component('child')
+        </div>
+      `,
+      );
+
+      await createTestFile("views/page.html", `@component('parent')`);
+
+      const engine = createTestEngine();
+      const result = await engine.render("page");
+
+      expect(result).toContain('<div class="parent">');
+      expect(result).toContain("<p>Inner Component</p>");
+    });
+
+    test("should allow @set inside components to define local variables", async () => {
+      await createTestFile(
+        "components/card.html",
+        `
+        @set count = 5 @endset
+        <div>Count: {{ count }}</div>
+      `,
+      );
+
+      await createTestFile("views/page.html", `@component('card')`);
+
+      const engine = createTestEngine();
+      const result = await engine.render("page");
+
+      expect(result).toContain("<div>Count: 5</div>");
+    });
+
+    test("should allow multiline params in @import and @component", async () => {
+      await createTestFile(
+        "components/includes/card.html",
+        `
+          <div class="card">
+            <h2>{{ title }}</h2>
+            <p>{{ description }}</p>
+            <img src="{{ raw(img) }}" />
+          </div>
+        `,
+      );
+
+      await createTestFile(
+        "components/multiline-wrapper.html",
+        `
+          <div class="wrapper">
+            @import("includes/card", {
+              title: cardTitle,
+              description: cardDescription,
+              img: cardImg
+            })
+          </div>
+        `,
+      );
+
+      await createTestFile(
+        "views/page.html",
+        `
+          @component("multiline-wrapper", {
+            cardTitle: "Card 1",
+            cardDescription: "This is a multiline card",
+            cardImg: "https://placehold.co/600x400"
+          })
+        `,
+      );
+
+      const engine = createTestEngine();
+      const result = await engine.render("page");
+
+      expect(result).toContain("<h2>Card 1</h2>");
+      expect(result).toContain("<p>This is a multiline card</p>");
+      expect(result).toContain('<img src="https://placehold.co/600x400" />');
+      expect(result).toContain('<div class="wrapper">');
     });
   });
 
@@ -212,6 +327,33 @@ describe("TemplateEngine", () => {
       expect(modResult).toContain("<p>Welcome, moderator!</p>");
       expect(vipResult).toContain("<p>Welcome, VIP user!</p>");
       expect(deniedResult).toContain("<p>Access denied.</p>");
+    });
+
+    test("should process @component with nested @if logic", async () => {
+      await createTestFile(
+        "components/item.html",
+        `
+        @if active
+          <span>Active: {{ name }}</span>
+        @else
+          <span>Inactive: {{ name }}</span>
+        @endif
+      `,
+      );
+
+      await createTestFile(
+        "views/page.html",
+        `
+        @component('item', { name: "Alpha", active: true })
+        @component('item', { name: "Beta", active: false })
+      `,
+      );
+
+      const engine = createTestEngine();
+      const result = await engine.render("page");
+
+      expect(result).toContain("<span>Active: Alpha</span>");
+      expect(result).toContain("<span>Inactive: Beta</span>");
     });
   });
 
@@ -288,6 +430,70 @@ describe("TemplateEngine", () => {
       expect(result).not.toContain("<div>2</div>");
       expect(result).not.toContain("<div>3</div>");
       expect(result).toContain("No numbers to show");
+    });
+
+    test("should process @component inside @for loop", async () => {
+      await createTestFile("components/item.html", `<li>Item {{ value }}</li>`);
+      await createTestFile(
+        "views/page.html",
+        `
+        <ul>
+          @for value in [1, 2, 3]
+            @component('item', { value: {{ value }} })
+          @endfor
+        </ul>
+      `,
+      );
+
+      const engine = createTestEngine();
+      const result = await engine.render("page");
+
+      expect(result).toContain("<li>Item 1</li>");
+      expect(result).toContain("<li>Item 2</li>");
+      expect(result).toContain("<li>Item 3</li>");
+    });
+
+    test("should process @import inside @for loop", async () => {
+      await createTestFile("views/includes/title.html", `<h2>{{ name }}</h2>`);
+      await createTestFile(
+        "views/page.html",
+        `
+        @for item in ["A", "B"]
+          @import("includes/title", { name: "{{ item }}" })
+        @endfor
+      `,
+      );
+
+      const engine = createTestEngine();
+      const result = await engine.render("page");
+
+      expect(result).toContain("<h2>A</h2>");
+      expect(result).toContain("<h2>B</h2>");
+    });
+
+    test("should support loop with nested @component and @import together", async () => {
+      await createTestFile("components/includes/title.html", `<h1>{{ title }}</h1>`);
+      await createTestFile(
+        "components/card.html",
+        `
+        <div class="card">
+          @import('includes/title')
+          @for n in [1, 2]
+            @component('button', { number: {{ n }} })
+          @endfor
+        </div>
+      `,
+      );
+
+      await createTestFile("components/button.html", `<button>Btn {{ number }}</button>`);
+      await createTestFile("views/page.html", `@component('card', { title: "Dynamic Title" })`);
+
+      const engine = createTestEngine();
+      const result = await engine.render("page");
+
+      expect(result).toContain("<h1>Dynamic Title</h1>");
+      expect(result).toContain("<button>Btn 1</button>");
+      expect(result).toContain("<button>Btn 2</button>");
     });
   });
 
@@ -428,7 +634,7 @@ describe("TemplateEngine", () => {
       await createTestFile(
         "views/loop-with-plugin.html",
         `
-          @for num in numbers            
+          @for num in numbers
             @if isEven(num)
               <div class="even">{{ num }}</div>
             @else
