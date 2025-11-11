@@ -11,7 +11,7 @@ export class TemplateEngine implements Engine {
   private defaultViewName?: string;
   private viewsPath: string;
   private layoutsPath?: string;
-  private partialsPath?: string;
+  private componentsPath?: string;
   private useModules: boolean;
   private currentModule: string | null = null;
   private fileExtension: string;
@@ -19,7 +19,7 @@ export class TemplateEngine implements Engine {
   constructor(options: Options) {
     this.viewsPath = options.path.views;
     this.layoutsPath = options.path.layouts;
-    this.partialsPath = options.path.components;
+    this.componentsPath = options.path.components;
     this.defaultViewName = options.viewName;
     this.useModules = options.useModules ?? false;
     this.fileExtension = options.fileExtension ?? ".html";
@@ -61,7 +61,9 @@ export class TemplateEngine implements Engine {
       }
 
       return await this.processContent(absolutePath, data);
-    } catch (_) {
+    } catch (error) {
+      console.log(error);
+
       throw new Error("Error rendering template.");
     }
   }
@@ -96,13 +98,12 @@ export class TemplateEngine implements Engine {
 
     // Initial processing
     viewContent = this.removeComments(viewContent);
-
-    if (this.partialsPath) {
-      viewContent = await this.processPartials(viewContent, data);
-    }
-
-    viewContent = await this.processInclude(viewContent, path.dirname(viewFilePath), data);
     viewContent = this.processOperations(viewContent, data);
+    viewContent = await this.processImport(viewContent, path.dirname(viewFilePath), data);
+
+    if (this.componentsPath) {
+      viewContent = await this.processComponents(viewContent, data);
+    }
 
     if (!this.layoutsPath) {
       viewContent = this.interpolateVariables(viewContent, data);
@@ -139,7 +140,7 @@ export class TemplateEngine implements Engine {
     return await this.resolveViewPath(templateName);
   }
 
-  private async resolveViewPath(templateName: string): Promise<string> {
+  private async resolveViewPath(templateName: string): Promise<string> {    
     const baseViewPath = this.viewsPath;
     const filePath = this.defaultViewName
       ? path.join(baseViewPath, templateName, `${this.defaultViewName}${this.fileExtension}`)
@@ -229,36 +230,44 @@ export class TemplateEngine implements Engine {
     return layout.replace(/@yield\s*\(["'](.+?)["']\)/g, (_, blockName) => blocks[blockName] || "");
   }
 
-  private async processPartials(content: string, data: Data): Promise<string> {
-    if (!this.partialsPath) throw new Error("Component path is not defined.");
+  private async processComponents(content: string, data: Data): Promise<string> {
+    if (!this.componentsPath) throw new Error("Component path is not defined.");
 
-    const partialRegex = /@component\(["'](.+?)["'](?:,\s*(.+?))?\)/g;
-    const matches = [...content.matchAll(partialRegex)];
+    const componentRegex = /@component\(["'](.+?)["'](?:,\s*([\s\S]*?))?\)/gs;
+    const matches = [...content.matchAll(componentRegex)];
 
     for (const match of matches) {
-      const partialName = match[1];
-      const partialParams = match[2] ? this.evaluateExpression(match[2], data) : {};
+      const componentName = match[1];
+      const componentParams = match[2] ? this.evaluateExpression(match[2], data) : {};
 
-      const partialContent = await this.readFile(join(this.partialsPath, `${partialName}${this.fileExtension}`));
-      const renderedPartial = this.interpolateVariables(partialContent, { ...data, ...partialParams });
+      const componentContent = await this.readFile(join(this.componentsPath, `${componentName}${this.fileExtension}`));
+      const processedComponent = await this.processIsolatedContent(
+        componentContent,
+        { ...data, ...componentParams },
+        this.componentsPath,
+      );
 
-      content = content.replace(match[0], renderedPartial);
+      content = content.replace(match[0], processedComponent);
     }
 
     return content;
   }
 
-  private async processInclude(content: string, currentDir: string, data: Data): Promise<string> {
-    const includeRegex = /@import\(["'](.+?)["'](?:,\s*(.+?))?\)/g;
-    const matches = [...content.matchAll(includeRegex)];
+  private async processImport(content: string, currentDir: string, data: Data): Promise<string> {
+    const regex = /@import\(["'](.+?)["'](?:,\s*([\s\S]*?))?\)/gs;
+    const matches = [...content.matchAll(regex)];
 
     for (const match of matches) {
-      const includePath = match[1];
-      const includeParams = match[2] ? this.evaluateExpression(match[2], data) : {};
+      const importPath = match[1];
+      const importParams = match[2] ? this.evaluateExpression(match[2], data) : {};
 
-      const fullPath = join(currentDir, `${includePath}${this.fileExtension}`);
-      const includeContent = await this.readFile(fullPath);
-      const renderedInclude = this.interpolateVariables(includeContent, { ...data, ...includeParams });
+      const fullPath = join(currentDir, `${importPath}${this.fileExtension}`);
+      const importContent = await this.readFile(fullPath);
+      const renderedInclude = await this.processIsolatedContent(
+        importContent,
+        { ...data, ...importParams },
+        path.dirname(fullPath),
+      );
 
       content = content.replace(match[0], renderedInclude);
     }
@@ -269,7 +278,7 @@ export class TemplateEngine implements Engine {
   private async processLayout(content: string): Promise<string> {
     if (!this.layoutsPath) return content;
 
-    const regex = /@layout\s*\(["'](.+?)["'](?:,\s*(.+?))?\)/g;
+    const regex = /@layout\s*\(["'](.+?)["'](?:,\s*([\s\S]*?))?\)/gs;
     const matches = [...content.matchAll(regex)];
 
     for (const match of matches) {
@@ -281,6 +290,20 @@ export class TemplateEngine implements Engine {
 
       content = content.replace(match[0], processed);
     }
+
+    return content;
+  }
+
+  private async processIsolatedContent(content: string, data: Data, baseDir: string): Promise<string> {
+    content = this.removeComments(content);
+    content = this.processOperations(content, data);
+    content = await this.processImport(content, baseDir, data);
+
+    if (this.componentsPath) {
+      content = await this.processComponents(content, data);
+    }
+
+    content = this.interpolateVariables(content, data);
 
     return content;
   }
@@ -386,6 +409,7 @@ export class TemplateEngine implements Engine {
     let processedContent = content;
 
     processedContent = this.extractVariables(processedContent, data);
+    processedContent = this.processLoops(processedContent, data);
     processedContent = this.processConditionals(processedContent, data);
     processedContent = this.interpolateVariables(processedContent, data);
 
@@ -430,17 +454,18 @@ export class TemplateEngine implements Engine {
       return string.replace(/@block\(["'][^"']+["']\)/g, "").replace(/@endblock/g, "");
     });
 
-    content = content.replace(/@component\(["'](.+?)["'](?:,\s*(.+?))?\)/g, () => {
-      if (!this.layoutsPath) {
+    content = content.replace(/@component\(["'](.+?)["'](?:,\s*(.+?))?\)/g, (match) => {
+      if (!this.componentsPath) {
         const message = colorize(
           "#FFA500",
           "WARNING: You're trying to use a component, but components path is not defined.",
         );
 
         console.log(message);
+        return "";
       }
 
-      return "";
+      return match;
     });
 
     return content;
