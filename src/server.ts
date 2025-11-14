@@ -75,7 +75,8 @@ export class Application {
       throw new Error("'tls' cannot be used with 'unix'. TLS is only applicable to TCP connections.");
     }
 
-    this.websocket.register(this.router.wsList());
+    const wsRoutes = this.router.wsList();
+    this.websocket.register(wsRoutes);
 
     const commonConfig = {
       development: options.development,
@@ -131,7 +132,11 @@ export class Application {
   }
 
   public routes(routes: Router): void {
-    this.router.register({ routes: routes.list(), wsRoutes: routes.wsList(), prefix: routes.getPrefix() });
+    this.router.register({
+      routes: routes.list(),
+      wsRoutes: routes.wsList(),
+      prefix: routes.getPrefix(),
+    });
   }
 
   public use(app: Application | string | Handler, handler?: Handler): void {
