@@ -76,6 +76,7 @@ describe("TemplateEngine", () => {
 
   describe("Layouts and Blocks", () => {
     beforeEach(async () => {
+      // Layouts
       await createTestFile(
         "layouts/base.html",
         `<html><head><title></title></head><body>@yield('content')</body></html>`,
@@ -87,19 +88,46 @@ describe("TemplateEngine", () => {
       );
 
       await createTestFile(
+        "layouts/base-with-loops.html",
+        `<ul>@for item in items\n<li>{{ item }}</li>\n@endfor\n</ul>\n@yield('content')`,
+      );
+
+      await createTestFile(
+        "layouts/base-with-conditionals.html",
+        `<body>@if 1 === 1 \n<h1>{{ headerText }}</h1>\n@endif\n@yield('content')</body>`,
+      );
+
+      // Views
+      await createTestFile(
         "views/page.html",
         `
-        @layout('base')
-        @block('content')Hello@endblock
-      `,
+      @layout('base')
+      @block('content')Hello@endblock
+    `,
       );
 
       await createTestFile(
         "views/page-params.html",
         `
-        @layout('base-params', { title: "Homepage" })
-        @block('content')Hello@endblock
-      `,
+      @layout('base-params', { title: "Homepage" })
+      @block('content')Hello@endblock
+    `,
+      );
+
+      await createTestFile(
+        "views/page-loop.html",
+        `
+      @layout('base-with-loops')
+      @block('content')Content here@endblock
+    `,
+      );
+
+      await createTestFile(
+        "views/page-conditional.html",
+        `
+      @layout('base-with-conditionals', { showHeader: true, headerText: "Welcome" })
+      @block('content')Main content@endblock
+    `,
       );
     });
 
@@ -114,6 +142,34 @@ describe("TemplateEngine", () => {
       const result = await engine.render("page-params");
 
       expect(result).toMatch("<html><head><title>Homepage</title></head><body>Hello</body></html>");
+    });
+
+    test("should process loops inside layout", async () => {
+      const engine = createTestEngine();
+      const result = await engine.render("page-loop", { items: ["a", "b", "c"] });
+      expect(result).toMatch("<ul><li>a</li><li>b</li><li>c</li></ul>Content here");
+    });
+
+    test("should process conditionals inside layout", async () => {
+      const engine = createTestEngine();
+      const result = await engine.render("page-conditional");
+      expect(result).toMatch("<body><h1>Welcome</h1>Main content</body>");
+    });
+
+    test("should process variables inside layout", async () => {
+      await createTestFile("layouts/base-var.html", `<body><p>{{ greeting }}</p>@yield('content')</body>`);
+
+      await createTestFile(
+        "views/page-var.html",
+        `
+        @layout('base-var', { greeting: "Hello World" })
+        @block('content')Content here@endblock
+      `,
+      );
+
+      const engine = createTestEngine();
+      const result = await engine.render("page-var");
+      expect(result).toMatch("<body><p>Hello World</p>Content here</body>");
     });
   });
 
