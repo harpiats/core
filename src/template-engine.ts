@@ -96,7 +96,7 @@ export class TemplateEngine implements Engine {
   private async processContent(viewFilePath: string, data: Data): Promise<string> {
     let viewContent = await this.readFile(viewFilePath);
 
-    // Initial processing
+    // Process view fully
     viewContent = this.removeComments(viewContent);
     viewContent = this.processOperations(viewContent, data);
     viewContent = await this.processImport(viewContent, path.dirname(viewFilePath), data);
@@ -105,31 +105,32 @@ export class TemplateEngine implements Engine {
       viewContent = await this.processComponents(viewContent, data);
     }
 
+    // Extract blocks from view
+    const extractedBlocks = await this.extractBlocks(viewContent);
+
+    let blocks: Blocks = {};
+    let remainingView = viewContent;
+
+    if (extractedBlocks) {
+      blocks = extractedBlocks.blocks;
+      remainingView = extractedBlocks.content;
+
+      if (remainingView.trim() && Object.keys(blocks).length === 0) {
+        blocks.body = remainingView;
+      }
+    }
+
     if (!this.layoutsPath) {
       viewContent = this.interpolateVariables(viewContent, data);
 
       return viewContent;
     }
 
-    // Layout and blocks processing
-    const extractedBlocks = await this.extractBlocks(viewContent);
-    if (!extractedBlocks) {
-      viewContent = this.interpolateVariables(viewContent, data);
+    // Load and fully process layout
+    const layoutContentRaw = await this.getLayoutContent(remainingView, data);
+    const finalLayoutContent = await this.applyLayout(layoutContentRaw, blocks);
 
-      return viewContent;
-    }
-
-    const { blocks, content: remainingView } = extractedBlocks;
-
-    if (remainingView.trim() && Object.keys(blocks).length === 0) {
-      blocks.body = remainingView;
-    }
-
-    const layoutContent = await this.processLayout(remainingView);
-    const contantWithLayout = this.layoutsPath ? await this.applyLayout(layoutContent, blocks) : remainingView;
-    const finalContent = this.interpolateVariables(contantWithLayout, data);
-
-    return finalContent;
+    return this.interpolateVariables(finalLayoutContent, data);
   }
 
   private async viewFilePathResolver(templateName: string): Promise<string> {
@@ -140,7 +141,7 @@ export class TemplateEngine implements Engine {
     return await this.resolveViewPath(templateName);
   }
 
-  private async resolveViewPath(templateName: string): Promise<string> {    
+  private async resolveViewPath(templateName: string): Promise<string> {
     const baseViewPath = this.viewsPath;
     const filePath = this.defaultViewName
       ? path.join(baseViewPath, templateName, `${this.defaultViewName}${this.fileExtension}`)
@@ -228,6 +229,37 @@ export class TemplateEngine implements Engine {
 
   private async applyLayout(layout: string, blocks: Blocks): Promise<string> {
     return layout.replace(/@yield\s*\(["'](.+?)["']\)/g, (_, blockName) => blocks[blockName] || "");
+  }
+
+  private async getLayoutContent(content: string, data: Data): Promise<string> {
+    const regex = /@layout\s*\(["'](.+?)["'](?:,\s*([\s\S]*?))?\)/g;
+    const matches = [...content.matchAll(regex)];
+
+    if (!matches.length) return content;
+
+    let processed = content;
+
+    for (const match of matches) {
+      const layoutName = match[1];
+      const params = match[2] ? this.evaluateExpression(match[2], data) : {};
+
+      const layoutFilePath = path.join(this.layoutsPath!, `${layoutName}${this.fileExtension}`);
+      let layoutContent = await this.readFile(layoutFilePath);
+
+      layoutContent = this.removeComments(layoutContent);
+      layoutContent = this.processOperations(layoutContent, { ...data, ...params });
+      layoutContent = await this.processImport(layoutContent, this.layoutsPath!, { ...data, ...params });
+
+      if (this.componentsPath) {
+        layoutContent = await this.processComponents(layoutContent, { ...data, ...params });
+      }
+
+      layoutContent = this.interpolateVariables(layoutContent, { ...data, ...params });
+
+      processed = processed.replace(match[0], layoutContent);
+    }
+
+    return processed;
   }
 
   private async processComponents(content: string, data: Data): Promise<string> {
