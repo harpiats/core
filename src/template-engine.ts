@@ -3,6 +3,7 @@ import path, { join } from "node:path";
 import { colorize } from "./utils/colorize";
 
 import type { Application } from "./server";
+import type { Shield } from "./shield";
 import type { Engine } from "./types/engine";
 import type { Blocks, Data, Options, PluginFunction } from "./types/template-engine";
 
@@ -28,8 +29,15 @@ export class TemplateEngine implements Engine {
     };
   }
 
-  public configure(app: Application): void {
+  public configure(app: Application, shield?: Shield): void {
     app.engine.set(this);
+
+    if (shield) {
+      this.plugins["generateNonce"] = () => {
+        const ip = app.requestIP() || "";
+        return shield.getNonce(ip);
+      };
+    }
   }
 
   public module(moduleName: string): this {
@@ -127,7 +135,7 @@ export class TemplateEngine implements Engine {
     }
 
     // Load and fully process layout
-    const layoutContentRaw = await this.getLayoutContent(remainingView, data);
+    const layoutContentRaw = await this.processLayout(remainingView, data);
     const finalLayoutContent = await this.applyLayout(layoutContentRaw, blocks);
 
     return this.interpolateVariables(finalLayoutContent, data);
@@ -231,35 +239,30 @@ export class TemplateEngine implements Engine {
     return layout.replace(/@yield\s*\(["'](.+?)["']\)/g, (_, blockName) => blocks[blockName] || "");
   }
 
-  private async getLayoutContent(content: string, data: Data): Promise<string> {
+  private async processLayout(content: string, data: Data): Promise<string> {
+    if (!this.layoutsPath) throw new Error("Layout path is not defined.");
+
     const regex = /@layout\s*\(["'](.+?)["'](?:,\s*([\s\S]*?))?\)/g;
     const matches = [...content.matchAll(regex)];
 
     if (!matches.length) return content;
-
-    let processed = content;
 
     for (const match of matches) {
       const layoutName = match[1];
       const params = match[2] ? this.evaluateExpression(match[2], data) : {};
 
       const layoutFilePath = path.join(this.layoutsPath!, `${layoutName}${this.fileExtension}`);
-      let layoutContent = await this.readFile(layoutFilePath);
+      const layoutContent = await this.readFile(layoutFilePath);
+      const processedLayout = await this.processIsolatedContent(
+        layoutContent,
+        { ...data, ...params },
+        this.layoutsPath,
+      );
 
-      layoutContent = this.removeComments(layoutContent);
-      layoutContent = this.processOperations(layoutContent, { ...data, ...params });
-      layoutContent = await this.processImport(layoutContent, this.layoutsPath!, { ...data, ...params });
-
-      if (this.componentsPath) {
-        layoutContent = await this.processComponents(layoutContent, { ...data, ...params });
-      }
-
-      layoutContent = this.interpolateVariables(layoutContent, { ...data, ...params });
-
-      processed = processed.replace(match[0], layoutContent);
+      content = content.replace(match[0], processedLayout);
     }
 
-    return processed;
+    return content;
   }
 
   private async processComponents(content: string, data: Data): Promise<string> {
@@ -302,25 +305,6 @@ export class TemplateEngine implements Engine {
       );
 
       content = content.replace(match[0], renderedInclude);
-    }
-
-    return content;
-  }
-
-  private async processLayout(content: string): Promise<string> {
-    if (!this.layoutsPath) return content;
-
-    const regex = /@layout\s*\(["'](.+?)["'](?:,\s*([\s\S]*?))?\)/gs;
-    const matches = [...content.matchAll(regex)];
-
-    for (const match of matches) {
-      const layoutName = match[1];
-      const params = match[2] ? this.evaluateExpression(match[2], {}) : {};
-
-      const layoutContent = await this.readFile(join(this.layoutsPath, `${layoutName}${this.fileExtension}`));
-      const processed = this.interpolateVariables(layoutContent, { ...params });
-
-      content = content.replace(match[0], processed);
     }
 
     return content;
