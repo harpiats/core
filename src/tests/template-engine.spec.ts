@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import type { Application } from "src/server";
 import { TemplateEngine } from "../template-engine";
+
+import type { Application } from "src/server";
 import type { Options } from "../types/template-engine";
 
 type TestEngineOptions = Omit<Partial<Options>, "path"> & {
@@ -936,6 +937,128 @@ describe("TemplateEngine", () => {
       const result = await engine.render("nested", data);
 
       expect(result).toBe("Nested");
+    });
+  });
+
+  describe("Shield Integration", () => {
+    test("should register generateNonce plugin when shield is provided", async () => {
+      await createTestFile("views/test-nonce.html", "{{ generateNonce() }}");
+
+      const mockApp = {
+        engine: {
+          set: mock(),
+        },
+        requestIP: mock(() => "192.168.1.1"),
+      };
+
+      const mockShield = {
+        getNonce: mock(() => "test-nonce-123"),
+      };
+
+      const engine = createTestEngine();
+      engine.configure(mockApp as any, mockShield as any);
+
+      // Testa indiretamente através da renderização
+      const result = await engine.render("test-nonce", {});
+      expect(result).toBe("test-nonce-123");
+      expect(mockShield.getNonce).toHaveBeenCalledWith("192.168.1.1");
+    });
+
+    test("should not have generateNonce plugin when shield is not provided", async () => {
+      await createTestFile("views/test-no-nonce.html", "{{ generateNonce() }}");
+
+      const mockApp = {
+        engine: {
+          set: mock(),
+        },
+      };
+
+      const engine = createTestEngine();
+      engine.configure(mockApp as any);
+
+      const result = await engine.render("test-no-nonce", {});
+
+      expect(result).not.toBe("test-nonce-123");
+      expect(typeof result).toBe("string");
+      expect(result).toBe("");
+    });
+
+    test("generateNonce should be called multiple times in template", async () => {
+      await createTestFile(
+        "views/multiple-nonce.html",
+        `
+      {{ generateNonce() }} - {{ generateNonce() }} - {{ generateNonce() }}
+    `,
+      );
+
+      const mockApp = {
+        engine: {
+          set: mock(),
+        },
+        requestIP: mock(() => "192.168.1.1"),
+      };
+
+      const mockShield = {
+        getNonce: mock(() => "test-nonce-456"),
+      };
+
+      const engine = createTestEngine();
+      engine.configure(mockApp as any, mockShield as any);
+
+      const result = await engine.render("multiple-nonce", {});
+      expect(result).toContain("test-nonce-456");
+      expect(mockShield.getNonce).toHaveBeenCalledTimes(3);
+    });
+
+    test("should handle empty IP address", async () => {
+      await createTestFile("views/empty-ip.html", "{{ generateNonce() }}");
+
+      const mockApp = {
+        engine: {
+          set: mock(),
+        },
+        requestIP: mock(() => ""),
+      };
+
+      const mockShield = {
+        getNonce: mock(() => "fallback-nonce"),
+      };
+
+      const engine = createTestEngine();
+      engine.configure(mockApp as any, mockShield as any);
+
+      const result = await engine.render("empty-ip", {});
+      expect(result).toBe("fallback-nonce");
+      expect(mockShield.getNonce).toHaveBeenCalledWith("");
+    });
+
+    test("should work with @set directive for nonce", async () => {
+      await createTestFile(
+        "views/set-nonce.html",
+        `
+      @set nonceValue = generateNonce() @endset
+      <script nonce="{{ nonceValue }}">console.log("{{ nonceValue }}");</script>
+    `,
+      );
+
+      const mockApp = {
+        engine: {
+          set: mock(),
+        },
+        requestIP: mock(() => "192.168.1.1"),
+      };
+
+      const mockShield = {
+        getNonce: mock(() => "set-nonce-789"),
+      };
+
+      const engine = createTestEngine();
+      engine.configure(mockApp as any, mockShield as any);
+
+      const result = await engine.render("set-nonce", {});
+      expect(result).toContain('nonce="set-nonce-789"');
+      expect(result).toContain('console.log("set-nonce-789")');
+      expect(mockShield.getNonce).toHaveBeenCalledTimes(1); // Só chamado uma vez com @set
     });
   });
 });

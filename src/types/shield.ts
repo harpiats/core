@@ -14,4 +14,5 @@ export type SecurityHeaders = {
 	xPermittedCrossDomainPolicies?: boolean | { permittedPolicies: string };
 	xPoweredBy?: boolean;
 	xXssProtection?: boolean;
+	useNonce?: boolean;
 };

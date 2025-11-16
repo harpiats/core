@@ -467,11 +467,33 @@ And set up the application to use the engine:
 
 ```typescript
 import harpia from "harpiats";
-import { engine } from "app/config/template-engine";
+import { engine } from "./template-engine";
 
 const app = harpia();
 engine.configure(app);
 
+app.get("/books", async (req, res) => {
+  await res.render("home", { title: "Books" });
+});
+
+app.listen...
+```
+
+If you want to use the [Security Header Protection](#security-headers-shield):
+```typescript
+import { harpia } from "harpia";
+import { shield } from "./shield";
+import { engine } from "./template-engine";
+
+const app = harpia();
+
+// Apply security headers middleware
+app.use(shield.middleware(app));
+
+// Setup template engine
+engine.configure(app, shield.instance);
+
+// Routes
 app.get("/books", async (req, res) => {
   await res.render("home", { title: "Books" });
 });
@@ -610,6 +632,18 @@ Using the `raw(...)` plugin, you can add content without escaping.
 ```html
 <p>{{ raw("<script>alert('xss')</script>") }}</p>
 ```
+
+#### Nonce Value
+
+When using the Shield module for security headers, the template engine automatically registers a `generateNonce` plugin. This plugin generates a unique nonce for each request, which you can use to secure inline scripts and styles for Content Security Policy (CSP).
+
+```html
+<script nonce="{{ nonce }}">
+  console.log("This script is CSP-compliant");
+</script>
+```
+
+> The `generateNonce` plugin is only available when the Shield instance is passed to the engine.configure method. See the [Shield](#security-headers-shield) section for setup instructions.
 
 ### Method Override
 The Method Override technique is commonly used to simulate HTTP methods like `PUT`, `DELETE`, and `PATCH` in web applications where the client (e.g., browsers) may not natively support these methods. This is particularly useful when working with HTML forms, which only support `GET` and `POST` methods.
@@ -1295,22 +1329,35 @@ The Shield module is designed to enhance the security of your application by aut
     - X-Content-Type-Options: Prevents MIME type sniffing.
     - X-Frame-Options: Protects against clickjacking.
     - X-XSS-Protection: Disables browser XSS filters (if not needed).
+    - Nonce Support: Generates cryptographic nonces for CSP inline scripts/styles.
 2. Customizable:
     - Override default headers by passing options to the constructor.
+    - Merge custom directives with sensible defaults.
 3. Middleware:
     - Easily integrate into your application as middleware.
+4. Template Engine Integration:
+    - Automatic nonce generation for secure inline scripts/styles.
+    - Seamless integration with the template engine.
 
-#### Example Usage
+#### Basic Usage
 Create a Shield Instance with shield.ts file to initialize and export the middleware:
+
 ```typescript
 import { Shield } from "harpiats/shield";
+import type { Harpia } from "harpiats";
 
-const instance = new Shield();
+const instance = new Shield({
+  useNonce: true, // Enable nonce generation, false as default.
+});
 
-export const shield = instance.middleware;
+export const shield = {
+  middleware: (server: Harpia) => instance.middleware(server),
+  instance: instance,
+}
 ```
 
 Apply the shield middleware in your server setup:
+
 ```typescript
 import { harpia } from "harpia";
 import { shield } from "./shield";
@@ -1318,7 +1365,7 @@ import { shield } from "./shield";
 const app = harpia();
 
 // Apply security headers middleware
-app.use(shield());
+app.use(shield.middleware());
 
 // Your routes
 app.get("/", (req, res) => {
@@ -1327,6 +1374,24 @@ app.get("/", (req, res) => {
 
 app.listen({ port: 3000 }, () => console.log("Server running on http://localhost:3000"));
 ```
+
+If you want to use the harpia template engine:
+
+```typescript
+import { harpia } from "harpia";
+import { shield } from "./shield";
+import { engine } from "./template-engine";
+
+const app = harpia();
+
+// Apply security headers middleware
+app.use(shield.middleware(app));
+
+// Setup template engine
+engine.configure(app, shield.instance);
+```
+
+> To understand more about the harpia template engine, see the [Template Engine](#template-engine) section.
 
 #### Customizing Security Headers
 You can customize the security headers by passing options to the Shield constructor:
@@ -1346,8 +1411,48 @@ const instance = new Shield({
   },
 });
 
-export const shield = instance.middleware;
+export const shield = {
+  middleware: (server: Harpia) => instance.middleware(server),
+  instance: instance,
+};
 ```
+
+#### Use nonce in templates:
+```html
+<!-- Use @set to define a variable to hold the nonce value -->
+@set nonce = generateNonce() @endset
+
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Secure Page</title>
+  </head>
+  <body>
+    <h1>Hello, {{ name }}!</h1>
+    
+    <!-- Secure inline script with nonce -->
+    <script nonce="{{ nonce }}">
+      console.log("This script is CSP-compliant");
+    </script>
+    
+    <!-- Secure inline styles with nonce -->
+    <style nonce="{{ nonce }}">
+      body { color: blue; }
+    </style>
+  </body>
+</html>
+```
+
+> `generateNonce()` is a Template Engine Plugin. You can see more about the plugins in [Template Engine](#template-engine) section.
+
+#### Important Notes
+
+- **Nonce Security**: Each nonce is unique per request and automatically invalidated after use. Since the `generateNonce()` plugin generates a new value on each call, you should cache it using `@set` if you need to use it in multiple places.
+- **CSP Compliance**: Use @set nonce = generateNonce() @endset to cache the nonce value in templates.
+- **Development**: Consider adding 'unsafe-inline' for easier development with hot reload.
+- **Production**: Remove unsafe directives and rely exclusively on nonces for inline content.
+
+The Shield module provides enterprise-grade security headers with zero configuration while remaining fully customizable for your specific needs.
 
 ### Test Client
 The **Test Client** is a powerful tool for testing your application's routes. It supports all HTTP methods (`GET`, `POST`, `PUT`, `DELETE`, `PATCH`, `OPTIONS`, `HEAD`), query parameters, headers, JSON payloads, form data, and file uploads. Below is a detailed explanation of its features and usage.
