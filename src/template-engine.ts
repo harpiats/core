@@ -4,7 +4,7 @@ import { colorize } from "./utils/colorize";
 
 import type { Application } from "./server";
 import type { Shield } from "./shield";
-import type { Engine } from "./types/engine";
+import type { Engine, RenderPromise } from "./types/engine";
 import type { Blocks, Data, Options, PluginFunction } from "./types/template-engine";
 
 export class TemplateEngine implements Engine {
@@ -16,6 +16,7 @@ export class TemplateEngine implements Engine {
   private useModules: boolean;
   private currentModule: string | null = null;
   private fileExtension: string;
+  private finalContent: string = "";
 
   constructor(options: Options) {
     this.viewsPath = options.path.views;
@@ -45,16 +46,31 @@ export class TemplateEngine implements Engine {
     return this;
   }
 
-  public async render(templateName: string, data: Data = {}): Promise<string> {
-    let resolvedView = templateName;
-    if (this.currentModule && !resolvedView.startsWith("*")) {
-      resolvedView = `*${this.currentModule}*/${resolvedView}`;
-    }
+  public render(templateName: string, data: Data = {}): RenderPromise {
+    // Main execution function responsible for resolving and processing the view
+    const execute = async () => {
+      let resolvedView = templateName;
 
-    const viewFilePath = await this.viewFilePathResolver(resolvedView);
-    const processedContent = await this.processContent(viewFilePath, data);
+      if (this.currentModule && !resolvedView.startsWith("*")) {
+        resolvedView = `*${this.currentModule}*/${resolvedView}`;
+      }
 
-    return this.minify(processedContent, "html");
+      const viewFilePath = await this.viewFilePathResolver(resolvedView);
+      const processedContent = await this.processContent(viewFilePath, data);
+
+      this.finalContent = processedContent;
+      return processedContent;
+    };
+
+    // Execute the rendering process and cast to RenderPromise for extra methods
+    const promise = execute() as RenderPromise;
+
+    // Attach a minification method chained to the render execution
+    promise.minify = (type: "html" | "generic" = "html") => {
+      return promise.then(() => this.minify(type));
+    };
+
+    return promise;
   }
 
   public async generate(viewPath: string, data: Data = {}): Promise<string> {
@@ -76,13 +92,9 @@ export class TemplateEngine implements Engine {
     }
   }
 
-  public registerPlugin(name: string, fn: PluginFunction): void {
-    this.plugins[name] = fn;
-  }
-
-  public minify(text: string, type: "html" | "generic" = "generic"): string {
+  public minify(type: "html" | "generic" = "generic"): string {
     if (type === "html") {
-      return text
+      return this.finalContent
         .replace(/<!--[\s\S]*?-->/g, "")
         .replace(/>\s+</g, "><")
         .replace(/\s+/g, " ")
@@ -91,7 +103,7 @@ export class TemplateEngine implements Engine {
         .trim();
     }
 
-    return text
+    return this.finalContent
       .replace(/^\s*[\r\n]/gm, "")
       .replace(/[\r\n]{2,}/g, "\n")
       .replace(/^[ \t]+/gm, "")
@@ -99,6 +111,10 @@ export class TemplateEngine implements Engine {
       .replace(/[ \t]+/g, " ")
       .replace(/\s+([.,;:!?])/g, "$1")
       .trim();
+  }
+
+  public registerPlugin(name: string, fn: PluginFunction): void {
+    this.plugins[name] = fn;
   }
 
   private async processContent(viewFilePath: string, data: Data): Promise<string> {

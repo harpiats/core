@@ -147,13 +147,13 @@ describe("TemplateEngine", () => {
 
     test("should process loops inside layout", async () => {
       const engine = createTestEngine();
-      const result = await engine.render("page-loop", { items: ["a", "b", "c"] });
+      const result = await engine.render("page-loop", { items: ["a", "b", "c"] }).minify("html");
       expect(result).toMatch("<ul><li>a</li><li>b</li><li>c</li></ul>Content here");
     });
 
     test("should process conditionals inside layout", async () => {
       const engine = createTestEngine();
-      const result = await engine.render("page-conditional");
+      const result = await engine.render("page-conditional").minify("html");
       expect(result).toMatch("<body><h1>Welcome</h1>Main content</body>");
     });
 
@@ -574,7 +574,7 @@ describe("TemplateEngine", () => {
       const engine = createTestEngine();
       engine.registerPlugin("equals", (a: string, b: string) => a === b);
 
-      const result = await engine.render("condition-plugin", { name: "John" });
+      const result = await engine.render("condition-plugin", { name: "John" }).minify("html");
       expect(result).toBe("<p>Hello John</p>");
     });
 
@@ -594,7 +594,7 @@ describe("TemplateEngine", () => {
       engine.registerPlugin("greaterThan", (a: number, b: number) => a > b);
       engine.registerPlugin("and", (...args: boolean[]) => args.every(Boolean));
 
-      const result = await engine.render("condition-complex", { name: "John", age: 30 });
+      const result = await engine.render("condition-complex", { name: "John", age: 30 }).minify("html");
       expect(result).toBe("<p>Hello John, over 25</p>");
     });
 
@@ -613,7 +613,7 @@ describe("TemplateEngine", () => {
       engine.registerPlugin("equals", (a: string, b: string) => a === b);
       engine.registerPlugin("uppercase", (str: string) => str.toUpperCase());
 
-      const result = await engine.render("condition-nested", { name: "john" });
+      const result = await engine.render("condition-nested", { name: "john" }).minify("html");
       expect(result).toBe("<p>Hello John</p>");
     });
 
@@ -751,7 +751,7 @@ describe("TemplateEngine", () => {
       const engine = createTestEngine();
       engine.registerPlugin("uppercase", (str: string) => str.toUpperCase());
 
-      const result = await engine.render("var-plugin-string", { name: "hello" });
+      const result = await engine.render("var-plugin-string", { name: "hello" }).minify("html");
       expect(result).toBe("<h1>HELLO</h1>");
     });
 
@@ -761,7 +761,7 @@ describe("TemplateEngine", () => {
       const engine = createTestEngine();
       engine.registerPlugin("uppercase", (str: string) => str.toUpperCase());
 
-      const result = await engine.render("var-plugin-var", { name: "world" });
+      const result = await engine.render("var-plugin-var", { name: "world" }).minify("html");
 
       expect(result).toBe("<h1>WORLD</h1>");
     });
@@ -775,7 +775,7 @@ describe("TemplateEngine", () => {
       const engine = createTestEngine();
       engine.registerPlugin("concat", (...args: string[]) => args.join(" "));
 
-      const result = await engine.render("var-plugin-multi", { name: "John" });
+      const result = await engine.render("var-plugin-multi", { name: "John" }).minify("html");
       expect(result).toBe("<p>Hello John !</p>");
     });
 
@@ -788,7 +788,7 @@ describe("TemplateEngine", () => {
       engine.registerPlugin("uppercase", (str: string) => str.toUpperCase());
       engine.registerPlugin("reverse", (str: string) => str.split("").reverse().join(""));
 
-      const result = await engine.render("var-plugin-nested", {});
+      const result = await engine.render("var-plugin-nested", {}).minify("html");
       expect(result).toBe("<h1>OLLEH</h1>");
     });
 
@@ -803,7 +803,7 @@ describe("TemplateEngine", () => {
       engine.registerPlugin("multiply", (a: number, b: number) => a * b);
       engine.registerPlugin("subtract", (a: number, b: number) => a - b);
 
-      const result = await engine.render("var-plugin-complex", {});
+      const result = await engine.render("var-plugin-complex", {}).minify("html");
       expect(result).toBe("<p>11</p>"); // (2*3) + (10-5) = 6 + 5 = 11
     });
 
@@ -842,7 +842,7 @@ describe("TemplateEngine", () => {
       );
 
       const engine = createTestEngine();
-      const result = await engine.render("var-plugin-undefined", {});
+      const result = await engine.render("var-plugin-undefined", {}).minify("html");
 
       expect(result).toBe("<h1></h1>");
     });
@@ -856,7 +856,7 @@ describe("TemplateEngine", () => {
       const engine = createTestEngine();
       engine.registerPlugin("toHtml", (str: string) => str);
 
-      const result = await engine.render("var-plugin-escaped", {});
+      const result = await engine.render("var-plugin-escaped", {}).minify("html");
       expect(result).toBe('<div><script>alert("xss")</script></div>');
     });
   });
