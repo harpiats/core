@@ -88,7 +88,7 @@ class ResponseWrapper {
     }
 
     try {
-      const rendered = await engine.render(resolvedView, data);
+      const rendered = await engine.render(resolvedView, data).minify("html");
 
       this.headersInstance.set("Content-Type", "text/html");
       this.body = rendered;
