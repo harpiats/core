@@ -76,7 +76,12 @@ describe("Response", () => {
   });
 
   it("should render template", async () => {
-    const mockRender = mock(async () => "<h1>Rendered</h1>");
+    const mockRender = mock(() => {
+      const promise = Promise.resolve("<h1>Rendered</h1>") as any;
+      promise.minify = mock(() => Promise.resolve("<h1>Rendered</h1>"));
+      return promise;
+    });
+
     const mockEngine = { render: mockRender };
     const app = Application.getInstance();
     app.engine.set(mockEngine as unknown as TemplateEngine);
@@ -93,7 +98,12 @@ describe("Response", () => {
   });
 
   it("should render template with module", async () => {
-    const mockRender = mock(async () => "<h1>Rendered</h1>");
+    const mockRender = mock(() => {
+      const promise = Promise.resolve("<h1>Rendered</h1>") as any;
+      promise.minify = mock(() => Promise.resolve("<h1>Rendered</h1>"));
+      return promise;
+    });
+
     const mockEngine = { render: mockRender };
     const app = Application.getInstance();
     app.engine.set(mockEngine as unknown as TemplateEngine);
@@ -116,14 +126,17 @@ describe("Response", () => {
   });
 
   it("should throw error if template rendering fails", async () => {
-    const mockRender = mock(async () => {
-      throw new Error("Rendering failed");
+    const mockRender = mock(() => {
+      return {
+        minify: mock(() => Promise.reject(new Error("Rendering failed"))),
+      };
     });
+
     const mockEngine = { render: mockRender };
     const app = Application.getInstance();
     app.engine.set(mockEngine as unknown as TemplateEngine);
 
-    await expect(response.render("index", { title: "Test" })).rejects.toThrow("Rendering failed");
+    expect(response.render("index", { title: "Test" })).rejects.toThrow("Rendering failed");
   });
 
   it("should set cookie with options", () => {
