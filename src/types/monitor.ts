@@ -41,4 +41,6 @@ export interface TrafficSource {
 export type Options = {
   store?: Store;
   ignore?: string[];
+  trustProxy?: boolean;
+  maxVisitorsKeys?: number;
 };

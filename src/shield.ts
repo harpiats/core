@@ -8,10 +8,14 @@ export type { SecurityHeaders } from "./types/shield";
 export class Shield {
   private headers: SecurityHeaders;
   private nonceStore: Map<string, string>;
+  private trustProxy: boolean;
+  private maxNoncesKeys: number;
 
   constructor(options: SecurityHeaders = {}) {
     this.nonceStore = new Map<string, string>();
     this.headers = {};
+    this.trustProxy = options.trustProxy ?? false;
+    this.maxNoncesKeys = options.maxNoncesKeys ?? 5000;
 
     this.setupHeaders(options);
     this.middleware = this.middleware.bind(this);
@@ -75,6 +79,10 @@ export class Shield {
   }
 
   private setNonce(ip: string, nonce: string): void {
+    if (this.nonceStore.size >= this.maxNoncesKeys && !this.nonceStore.has(ip)) {
+      const firstKey = this.nonceStore.keys().next().value;
+      if (firstKey !== undefined) this.nonceStore.delete(firstKey);
+    }
     this.nonceStore.set(ip, nonce);
   }
 
@@ -175,7 +183,7 @@ export class Shield {
   private getClientIP(req: Request, server: Application): string {
     const serverIp = server.requestIP();
 
-    if (!serverIp) {
+    if (!serverIp && this.trustProxy) {
       return (
         req.headers.get("x-forwarded-for") ||
         req.headers.get("cf-connecting-ip") ||
@@ -184,7 +192,7 @@ export class Shield {
       );
     }
 
-    return serverIp;
+    return serverIp || "unknown";
   }
 
   public middleware(server: Application) {

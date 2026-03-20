@@ -11,7 +11,7 @@ export type { CookiesOptions } from "./src/types/cookies";
 export type { Store } from "./src/types/store";
 
 export default function harpia(): Application {
-  return Application.getInstance();
+  return new Application();
 }
 
 export { Router } from "./src/router";

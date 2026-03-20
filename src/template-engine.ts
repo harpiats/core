@@ -552,8 +552,8 @@ export class TemplateEngine implements Engine {
         if (pluginResult !== undefined && pluginResult !== null) {
           return pluginResult;
         }
-      } catch (error: any) {
-        console.warn(`Plugin ${pluginName} execution warning:`, error.message);
+      } catch (error: unknown) {
+        console.warn(`Plugin ${pluginName} execution warning:`, error instanceof Error ? error.message : String(error));
         return null;
       }
     }
@@ -562,8 +562,8 @@ export class TemplateEngine implements Engine {
     try {
       const func = new Function(...Object.keys(data), `return ${expression};`);
       return func(...Object.values(data));
-    } catch (error: any) {
-      console.warn(`Expression evaluation warning: ${error.message}`);
+    } catch (error: unknown) {
+      console.warn(`Expression evaluation warning: ${error instanceof Error ? error.message : String(error)}`);
       return null;
     }
   }

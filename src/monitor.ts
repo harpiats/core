@@ -6,14 +6,18 @@ export class RequestMonitor {
   private request: Request | null = null;
   private clientIp: string | null = null;
   private trafficSource: TrafficSource | null = null;
-  private store: Store;
+  private store: Store<any>;
   private ignoredPaths: string[];
+  private trustProxy: boolean;
+  private maxVisitorsKeys: number;
 
   constructor(options?: Options) {
-    const { store, ignore } = options || {};
+    const { store, ignore, trustProxy, maxVisitorsKeys } = options || {};
 
-    this.store = store || new MemoryStore();
+    this.store = store || new MemoryStore<any>();
     this.ignoredPaths = ignore || [];
+    this.trustProxy = trustProxy ?? false;
+    this.maxVisitorsKeys = maxVisitorsKeys ?? 5000;
   }
 
   public async initialize(request: Request, clientIp: string, trafficSource?: TrafficSource): Promise<void> {
@@ -39,12 +43,17 @@ export class RequestMonitor {
       throw new Error("Monitor has not been initialized with request data");
     }
 
-    const headers = this.request.headers;
     const ipFromSocket = this.clientIp || "unknown";
-    const ipFromHeaders =
-      headers.get("x-forwarded-for")?.split(",")[0] || headers.get("cf-connecting-ip") || headers.get("x-real-ip");
+    
+    if (this.trustProxy) {
+      const headers = this.request.headers;
+      const ipFromHeaders =
+        headers.get("x-forwarded-for")?.split(",")[0] || headers.get("cf-connecting-ip") || headers.get("x-real-ip");
 
-    return ipFromHeaders || ipFromSocket;
+      return ipFromHeaders || ipFromSocket;
+    }
+
+    return ipFromSocket;
   }
 
   private mapToObject<K extends string | number | symbol, V>(map: Map<K, V>): Record<K, V> {
@@ -150,6 +159,11 @@ export class RequestMonitor {
       const dailyVisitors = monitor.access.visitorsByDate.get(dateKey)!;
 
       if (!dailyVisitors.has(clientIp)) {
+        if (dailyVisitors.size >= this.maxVisitorsKeys) {
+          const firstKey = dailyVisitors.keys().next().value;
+          if (firstKey !== undefined) dailyVisitors.delete(firstKey);
+        }
+
         dailyVisitors.set(clientIp, {
           totalRequests: 0,
           pagesVisited: [],
@@ -200,6 +214,11 @@ export class RequestMonitor {
       const dailyVisitors = monitor.access.visitorsByDate.get(dateKey)!;
 
       if (!dailyVisitors.has(clientIp)) {
+        if (dailyVisitors.size >= this.maxVisitorsKeys) {
+          const firstKey = dailyVisitors.keys().next().value;
+          if (firstKey !== undefined) dailyVisitors.delete(firstKey);
+        }
+
         dailyVisitors.set(clientIp, {
           totalRequests: 0,
           pagesVisited: [],

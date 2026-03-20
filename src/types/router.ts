@@ -15,3 +15,8 @@ export type RouterRegisterTypes = {
   wsRoutes?: WebSocketInterface[];
   prefix?: string;
 };
+
+export interface MatchedRoute {
+  route: RouteInterface;
+  params: Record<string, string>;
+}

@@ -7,7 +7,7 @@ Harpia Core is the foundational module of the Harpia Framework, designed exclusi
 
 [![Bun](https://img.shields.io/badge/Bun-%3E%3D%201.x-blue.svg)](https://bun.sh/)
 
-[![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](https://github.com/harpiats/core/blob/main/LICENSE)
+[![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](https://github.com/@harpia/core/core/blob/main/LICENSE)
 
 
 Table of Contents
@@ -38,7 +38,7 @@ Table of Contents
 ## Installation
 
 ```bash
-  bun add harpiats
+  bun add @harpia/core
 ```
 
 ## Features
@@ -447,7 +447,7 @@ To use the harpia template engine, you can follow these steps:
 create a `template-engine.ts` file:
 ```typescript
 import path from "node:path";
-import { TemplateEngine } from "harpiats/template-engine";
+import { TemplateEngine } from "@harpia/core/template-engine";
 
 const baseDir = process.cwd();
 
@@ -466,7 +466,7 @@ export const engine = new TemplateEngine({
 And set up the application to use the engine:
 
 ```typescript
-import harpia from "harpiats";
+import harpia from "@harpia/core";
 import { engine } from "./template-engine";
 
 const app = harpia();
@@ -504,7 +504,7 @@ app.listen...
 If you would like use a module structure, e.g. `modules/users/pages/home/page.html`, then create a `template-engine.ts` file:
 ```typescript
 import path from "node:path";
-import { TemplateEngine } from "harpiats/template-engine";
+import { TemplateEngine } from "@harpia/core/template-engine";
 
 const baseDir = process.cwd();
 
@@ -523,7 +523,7 @@ export const engine = new TemplateEngine({
 And set up the application to use the engine:
 
 ```typescript
-import harpia from "harpiats";
+import harpia from "@harpia/core";
 import { engine } from "app/config/template-engine";
 
 const app = harpia();
@@ -538,7 +538,7 @@ app.listen...
 
 It is also possible to render a template from its path, regardless of where it is in the application. To do this, we can follow the example:
 ```typescript
-import harpia from "harpiats";
+import harpia from "@harpia/core";
 import { engine } from "app/config/template-engine";
 
 const app = harpia();
@@ -575,7 +575,7 @@ app.listen...
 
 ```typescript
 import path from "node:path";
-import { TemplateEngine } from "harpiats/template-engine";
+import { TemplateEngine } from "@harpia/core/template-engine";
 
 const baseDir = process.cwd();
 
@@ -1065,8 +1065,8 @@ The `CSRF` class provides a simple and lightweight mechanism for generating and 
 #### Setup
 
 ```ts
-import { CSRF } from "harpiats/csrf";
-import { MemoryStore } from "harpiats/memory-store";
+import { CSRF } from "@harpia/core/csrf";
+import { MemoryStore } from "@harpia/core/memory-store";
 
 const csrf = new CSRF({
   store: new MemoryStore(),
@@ -1159,7 +1159,7 @@ You can set up a middleware to manage single or multiple file uploads, specifyin
 First, create an instance of the Upload module with your desired configuration:
 
 ```typescript
-import { Upload } from "harpiats/upload";
+import { Upload } from "@harpia/core/upload";
 
 export const upload = new Upload({
   fieldName: "file",       // Field name for the file in the request
@@ -1198,9 +1198,9 @@ The Request Monitor tracks and analyzes request metrics, including visitor data,
 First, instantiate the RequestMonitor and configure it with a storage mechanism (e.g., MemoryStore). You can also define routes to ignore, such as favicon.ico.
 
 ```typescript
-import type { NextFunction, Request, Response } from "harpiats";
-import { MemoryStore } from "harpiats/memory-store";
-import { RequestMonitor } from "harpiats/monitor";
+import type { NextFunction, Request, Response } from "@harpia/core";
+import { MemoryStore } from "@harpia/core/memory-store";
+import { RequestMonitor } from "@harpia/core/monitor";
 import { app } from "start/server";
 
 // Initialize the RequestMonitor
@@ -1260,7 +1260,7 @@ app.get("/metrics", async (req, res) => {
 **Using Redis as a Store**
 Create a redis.ts file:
 ```typescript
-import type { Store } from "harpiats";
+import type { Store } from "@harpia/core";
 import Redis from "ioredis";
 
 export class RedisStore implements Store {
@@ -1343,8 +1343,8 @@ The Shield module is designed to enhance the security of your application by aut
 Create a Shield Instance with shield.ts file to initialize and export the middleware:
 
 ```typescript
-import { Shield } from "harpiats/shield";
-import type { Harpia } from "harpiats";
+import { Shield } from "@harpia/core/shield";
+import type { Harpia } from "@harpia/core";
 
 const instance = new Shield({
   useNonce: true, // Enable nonce generation, false as default.
@@ -1492,7 +1492,7 @@ The **Test Client** is a powerful tool for testing your application's routes. It
 
 ```typescript
 import { expect, test } from "bun:test";
-import { TestClient } from "harpiats";
+import { TestClient } from "@harpia/core";
 import { app } from "start/server";
 
 test("GET /hello returns status 401", async () => {
@@ -1622,8 +1622,8 @@ console.log(await memoryStore.get("session123")); // undefined
 
 **Using with Session Management**
 ```typescript
-import { MemoryStore } from "harpiats/memory-store";
-import { SessionManager } from "harpiats/session";
+import { MemoryStore } from "@harpia/core/memory-store";
+import { SessionManager } from "@harpia/core/session";
 
 const memoryStore = new MemoryStore();
 const sessionManager = new SessionManager({ store: memoryStore });
@@ -1645,7 +1645,7 @@ The Redis Storage provides a persistent key-value store using Redis. It implemen
 
 **Implementation**
 ```typescript
-import type { Store } from "harpiats";
+import type { Store } from "@harpia/core";
 import Redis from "ioredis";
 
 export class RedisStore implements Store {

@@ -1,5 +1,5 @@
-export interface Store {
-	get(sessionId: string): Promise<Record<string, any> | undefined>;
-	set(sessionId: string, data: Record<string, any>): Promise<void>;
+export interface Store<T = any> {
+	get(sessionId: string): Promise<T | undefined>;
+	set(sessionId: string, data: T): Promise<void>;
 	delete(sessionId: string): Promise<void>;
 }

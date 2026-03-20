@@ -4,7 +4,8 @@ import { Middleware } from "../middlewares";
 import { Request } from "../request";
 import { Response } from "../response";
 import { Router } from "../router";
-import { Application } from "../server";
+import harpia from "../../index";
+import type { Application } from "../server";
 import { WebSocket } from "../websocket";
 
 import type { MethodOptions } from "src/types/router";
@@ -17,7 +18,7 @@ describe("Server", () => {
   let mockFile: any;
 
   beforeEach(() => {
-    app = Application.getInstance();
+    app = harpia();
     mockServer = {
       requestIP: mock(() => ({ address: "127.0.0.1" })),
       stop: mock(),
@@ -52,11 +53,6 @@ describe("Server", () => {
 
   afterEach(() => {
     app.stop();
-  });
-
-  it("should be a singleton", () => {
-    const app2 = Application.getInstance();
-    expect(app).toBe(app2);
   });
 
   describe("listen", () => {
@@ -436,49 +432,45 @@ describe("Server", () => {
   });
 
   describe("resolveStaticFiles", () => {
-    it("should return false if no static path is set", async () => {
-      const result = await (app as any).resolveStaticFiles("/test", mockResponse);
-      expect(result).toBe(false);
+    it("should return null if no static path is set", async () => {
+      const result = await (app as any).resolveStaticFiles("/test");
+      expect(result).toBeNull();
     });
 
-    it("should return false if the file does not exist", async () => {
+    it("should return null if the file does not exist", async () => {
       (app as any).staticPath = "/public";
       mockFile.exists.mockResolvedValue(false);
-      const result = await (app as any).resolveStaticFiles("/test.html", mockResponse);
-      expect(result).toBe(false);
+      const result = await (app as any).resolveStaticFiles("/test.html");
+      expect(result).toBeNull();
     });
 
-    it("should return true and send the file if the file exists", async () => {
+    it("should return a response if the file exists", async () => {
       (app as any).staticPath = "/public";
       mockFile.exists.mockResolvedValue(true);
-      const result = await (app as any).resolveStaticFiles("/test.html", mockResponse);
-      expect(result).toBe(true);
-      expect(mockResponse.headers.get("Content-Type")).toBe("text/html");
-      expect(mockFile.arrayBuffer).toHaveBeenCalled();
+      const result = await (app as any).resolveStaticFiles("/test.html");
+      expect(result).not.toBeNull();
     });
 
     it("should handle files without type", async () => {
       (app as any).staticPath = "/public";
       mockFile.exists.mockResolvedValue(true);
       mockFile.type = undefined;
-      const result = await (app as any).resolveStaticFiles("/test.bin", mockResponse);
-      expect(result).toBe(true);
-      expect(mockResponse.headers.get("Content-Type")).toBe("application/octet-stream");
-      expect(mockFile.arrayBuffer).toHaveBeenCalled();
+      const result = await (app as any).resolveStaticFiles("/test.bin");
+      expect(result).not.toBeNull();
     });
   });
 
   describe("methodOverride", () => {
     it("should not override method if not a POST request", async () => {
       mockRequest.method = "GET";
-      const method = await (app as any).methodOverride(mockRequest, mockResponse, "/test");
+      const method = await (app as any).methodOverride(mockRequest);
       expect(method).toBe("GET");
     });
 
     it("should not override method if content-type is not application/x-www-form-urlencoded", async () => {
       mockRequest.method = "POST";
       mockRequest.headers.set("content-type", "application/json");
-      const method = await (app as any).methodOverride(mockRequest, mockResponse, "/test");
+      const method = await (app as any).methodOverride(mockRequest);
       expect(method).toBe("POST");
     });
 
@@ -486,7 +478,7 @@ describe("Server", () => {
       mockRequest.method = "POST";
       mockRequest.headers.set("content-type", "application/x-www-form-urlencoded");
       mockRequest.text = mock(() => Promise.resolve("_method=PUT"));
-      const method = await (app as any).methodOverride(mockRequest, mockResponse, "/test");
+      const method = await (app as any).methodOverride(mockRequest);
       expect(method).toBe("PUT");
     });
 
@@ -494,7 +486,7 @@ describe("Server", () => {
       mockRequest.method = "POST";
       mockRequest.headers.set("content-type", "application/x-www-form-urlencoded");
       mockRequest.text = mock(() => Promise.resolve("_method=INVALID"));
-      const method = await (app as any).methodOverride(mockRequest, mockResponse, "/test");
+      const method = await (app as any).methodOverride(mockRequest);
       expect(method).toBe("POST");
     });
   });

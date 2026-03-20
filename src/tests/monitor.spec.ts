@@ -65,8 +65,9 @@ describe("RequestMonitor", () => {
       },
     });
 
-    await monitor.initialize(request, mockClientIp);
-    const clientIp = (monitor as any).getClientIp();
+    const trustedMonitor = new RequestMonitor({ store: mockStore, trustProxy: true });
+    await trustedMonitor.initialize(request, mockClientIp);
+    const clientIp = (trustedMonitor as any).getClientIp();
 
     expect(clientIp).toBe("172.16.0.1");
   });
@@ -78,8 +79,9 @@ describe("RequestMonitor", () => {
       },
     });
 
-    await monitor.initialize(request, mockClientIp);
-    const clientIp = (monitor as any).getClientIp();
+    const trustedMonitor = new RequestMonitor({ store: mockStore, trustProxy: true });
+    await trustedMonitor.initialize(request, mockClientIp);
+    const clientIp = (trustedMonitor as any).getClientIp();
 
     expect(clientIp).toBe("10.0.0.2");
   });

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
 import { Response } from "../response";
-import { Application } from "../server";
+import harpia from "../../index";
 import type { TemplateEngine } from "../template-engine";
 
 describe("Response", () => {
@@ -20,7 +20,7 @@ describe("Response", () => {
     response.send("Hello, world!");
     const parsedResponse = response.parse();
     expect(await parsedResponse.text()).toBe("Hello, world!");
-    expect(parsedResponse.headers.get("Content-Lenght")).toBe("13");
+    expect(parsedResponse.headers.get("Content-Length")).toBe("13");
   });
 
   it("should set body and content-type header with html", async () => {
@@ -83,8 +83,9 @@ describe("Response", () => {
     });
 
     const mockEngine = { render: mockRender };
-    const app = Application.getInstance();
+    const app = harpia();
     app.engine.set(mockEngine as unknown as TemplateEngine);
+    response = new Response(app);
 
     await response.render("index", { title: "Test" });
     const parsedResponse = response.parse();
@@ -105,8 +106,9 @@ describe("Response", () => {
     });
 
     const mockEngine = { render: mockRender };
-    const app = Application.getInstance();
+    const app = harpia();
     app.engine.set(mockEngine as unknown as TemplateEngine);
+    response = new Response(app);
 
     response.module("users");
     await response.render("index", { title: "Test" });
@@ -118,8 +120,8 @@ describe("Response", () => {
   });
 
   it("should throw error if no template engine is configured", async () => {
-    const app = Application.getInstance();
-
+    const app = harpia();
+    response = new Response(app);
     app.engine.set(null as unknown as TemplateEngine);
 
     expect(response.render("index", { title: "Test" })).rejects.toThrow("No template engine configured.");
@@ -133,8 +135,9 @@ describe("Response", () => {
     });
 
     const mockEngine = { render: mockRender };
-    const app = Application.getInstance();
+    const app = harpia();
     app.engine.set(mockEngine as unknown as TemplateEngine);
+    response = new Response(app);
 
     expect(response.render("index", { title: "Test" })).rejects.toThrow("Rendering failed");
   });

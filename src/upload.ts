@@ -79,10 +79,10 @@ export class Upload {
         }
 
         successfullyWrittenFiles.push(filePath);
-      } catch (error: any) {
+      } catch (error: unknown) {
         errors.push({
           fileName: fileName,
-          message: `Failed to write file: ${error.message}`,
+          message: `Failed to write file: ${error instanceof Error ? error.message : String(error)}`,
         });
       }
     }

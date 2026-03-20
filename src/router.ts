@@ -1,16 +1,26 @@
 import type { Handler } from "./types/handler";
-import type { RouteInterface, RouterRegisterTypes } from "./types/router";
+import type { MatchedRoute, RouteInterface, RouterRegisterTypes } from "./types/router";
 import type { WebSocketHandlers, WebSocketInterface } from "./types/websocket";
+import { RadixTree } from "./radix";
 
 export class Router {
   private routes: RouteInterface[];
   private prefix: string;
   private wsRoutes: WebSocketInterface[];
+  private treeMapping: Map<string, RadixTree>;
 
   constructor(prefix?: string) {
     this.routes = [];
     this.prefix = prefix ? this.formatPrefix(prefix) : "";
     this.wsRoutes = [];
+    this.treeMapping = new Map();
+  }
+
+  private getTree(method: string): RadixTree {
+    if (!this.treeMapping.has(method)) {
+      this.treeMapping.set(method, new RadixTree());
+    }
+    return this.treeMapping.get(method)!;
   }
 
   public register({ routes, wsRoutes, prefix }: RouterRegisterTypes): void {
@@ -18,8 +28,7 @@ export class Router {
 
     if (prefix) {
       routesWithPrefix = routes.map((route) => {
-        route.path = `${prefix}${route.path}`;
-        return route;
+        return { ...route, path: `${prefix}${route.path}` };
       });
     }
 
@@ -28,15 +37,17 @@ export class Router {
 
       if (prefix) {
         wsWithPrefix = wsRoutes.map((route) => {
-          route.path = `${prefix}${route.path}`;
-          return route;
+          return { ...route, path: `${prefix}${route.path}` };
         });
       }
 
       this.wsRoutes.push(...wsWithPrefix);
     }
 
-    this.routes.push(...routesWithPrefix);
+    for (const route of routesWithPrefix) {
+      this.routes.push(route);
+      this.getTree(route.method).insert(route);
+    }
   }
 
   public list(): RouteInterface[] {
@@ -51,87 +62,72 @@ export class Router {
     return this.prefix;
   }
 
+  private addRoute(method: string, path: string, handlers: Handler[], controller: Handler) {
+    const route: RouteInterface = { method: method as any, path, handlers, controller };
+    this.routes.push(route);
+    this.getTree(method).insert(route);
+  }
+
   public get(path: string, ...handlers: Handler[]): this {
     const controller = handlers.pop();
-
     if (!controller) {
       throw new Error("Controller handler is required.");
     }
-
-    this.routes.push({ method: "GET", path, handlers, controller });
-
+    this.addRoute("GET", path, handlers, controller);
     return this;
   }
 
   public post(path: string, ...handlers: Handler[]): this {
     const controller = handlers.pop();
-
     if (!controller) {
       throw new Error("Controller handler is required.");
     }
-
-    this.routes.push({ method: "POST", path, handlers, controller });
-
+    this.addRoute("POST", path, handlers, controller);
     return this;
   }
 
   public put(path: string, ...handlers: Handler[]): this {
     const controller = handlers.pop();
-
     if (!controller) {
       throw new Error("Controller handler is required.");
     }
-
-    this.routes.push({ method: "PUT", path, handlers, controller });
-
+    this.addRoute("PUT", path, handlers, controller);
     return this;
   }
 
   public delete(path: string, ...handlers: Handler[]): this {
     const controller = handlers.pop();
-
     if (!controller) {
       throw new Error("Controller handler is required.");
     }
-
-    this.routes.push({ method: "DELETE", path, handlers, controller });
-
+    this.addRoute("DELETE", path, handlers, controller);
     return this;
   }
 
   public patch(path: string, ...handlers: Handler[]): this {
     const controller = handlers.pop();
-
     if (!controller) {
       throw new Error("Controller handler is required.");
     }
-
-    this.routes.push({ method: "PATCH", path, handlers, controller });
-
+    this.addRoute("PATCH", path, handlers, controller);
     return this;
   }
 
   public options(path: string, ...handlers: Handler[]): this {
     const controller = handlers.pop();
-
     if (!controller) {
       throw new Error("Controller handler is required.");
     }
-
-    this.routes.push({ method: "OPTIONS", path, handlers, controller });
-
+    this.addRoute("OPTIONS", path, handlers, controller);
     return this;
   }
 
   public head(path: string, ...handlers: Handler[]): this {
     const controller = handlers.pop();
-
     if (!controller) {
       throw new Error("Controller handler is required.");
     }
-
-    this.routes.push({ method: "HEAD", path, handlers, controller });
-
+    this.addRoute("HEAD", path, handlers, controller);
     return this;
   }
 
@@ -139,27 +135,16 @@ export class Router {
     this.wsRoutes.push({ path, handlers });
   }
 
-  public isRouteMatching(url: string, method: string): RouteInterface | null {
-    const urlSegments = url.split("/").filter(Boolean);
+  public isRouteMatching(url: string, method: string): MatchedRoute | null {
+    if (!this.treeMapping.has(method)) {
+      return null;
+    }
 
-    for (const route of this.routes) {
-      const routeSegments = route.path.split("/").filter(Boolean);
+    const tree = this.treeMapping.get(method)!;
+    const result = tree.search(url);
 
-      if (route.method !== method) {
-        continue;
-      }
-
-      if (urlSegments.length !== routeSegments.length) {
-        continue;
-      }
-
-      const isSegmentMatching = routeSegments.every((segment, index) => {
-        return segment.startsWith(":") || segment === urlSegments[index];
-      });
-
-      if (isSegmentMatching) {
-        return route;
-      }
+    if (result.route) {
+      return { route: result.route, params: result.params };
     }
 
     return null;
