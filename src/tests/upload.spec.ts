@@ -3,7 +3,8 @@ import { rm } from "node:fs/promises";
 import { resolve } from "node:path";
 import { Upload } from "../upload";
 
-import type { Request, Response } from "harpiats";
+import type { Request } from "../request";
+import type { Response } from "../response";
 
 // Mock de Request e Response
 const mockRequest = (files?: File[]): Request =>

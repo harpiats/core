@@ -1,7 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import type { NextFunction, Request, Response } from "harpiats";
+import type { NextFunction } from "../index";
+import type { Request } from "./request";
+import type { Response } from "./response";
 import type { CheckReturnObject, FileChecker, UploadConstructor } from "./types/upload";
 
 export class Upload {

@@ -1,9 +1,9 @@
 import { join } from "node:path";
 
 export async function checkNpmVersion(): Promise<void> {
-  // Executa toda a verificação de forma assíncrona, não travando o Call Stack do Bun
+  // Runs the entire check asynchronously, without blocking Bun's Call Stack
   Bun.spawn(["bun", "-e", `
-    const pkgName = "harpiats";
+    const pkgName = "@harpia/core";
     const cacheFile = "${join(process.cwd(), "node_modules", ".harpia_cache")}";
     const pkgFile = "${join(process.cwd(), "package.json")}";
     
@@ -26,25 +26,24 @@ export async function checkNpmVersion(): Promise<void> {
           const oneday = 24 * 60 * 60 * 1000;
           
           if (now - lastCheck < oneday) {
-            return; // Cache válido (menos de 24h)
+            return; // Valid cache (less than 24h)
           }
         }
         
-        const response = await fetch(\`https://registry.npmjs.org/\${pkgName}/latest\`);
+        const response = await fetch("https://registry.npmjs.org/" + pkgName + "/latest");
         
         if (!response.ok) return;
         
         const data = await response.json();
         const latestVersion = data.version;
         
-        if (latestVersion && latestVersion !== currentVersion) {
-          console.log(\`\\x1b[33m\\n[Harpia] Uma nova versão do HarpiaTS está disponível! (\${currentVersion} -> \${latestVersion})\\x1b[0m\`);
-          console.log(\`\\x1b[33mExecute 'bun add harpiats@latest' para atualizar.\\n\\x1b[0m\`);
+          console.log("\x1b[33m\n[Harpia] A new version of Harpia is available! (" + currentVersion + " -> " + latestVersion + ")\x1b[0m");
+          console.log("\x1b[33mRun 'bun add @harpia/core@latest' to update.\n\x1b[0m");
         }
         
         await Bun.write(cacheFile, new Date().toISOString());
       } catch (e) {
-        // Falha silenciosa para não quebrar a experiência do desenvolvedor
+        // Silent failure so as not to break the developer experience
       }
     }
     
