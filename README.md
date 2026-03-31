@@ -63,7 +63,7 @@ Table of Contents
 
 ### Start the server
 ```typescript
-import harpia from "harpia";
+import harpia from "@harpia/core";
 
 const app = harpia();
 
@@ -82,7 +82,7 @@ This object defines how the HTTP and WebSocket servers behave, including port, h
 #### Example
 
 ```typescript
-import harpia from "harpia";
+import harpia from "@harpia/core";
 
 const app = harpia();
 
@@ -141,7 +141,7 @@ The `ws` property defines advanced options for WebSocket behavior and resource l
 Creating a route in a different file.
 
 ```typescript
-import { Router } from "harpia";
+import { Router } from "@harpia/core";
 
 const books = Router();
 
@@ -153,7 +153,7 @@ export default books;
 Creating a route with a prefix
 
 ```typescript
-import { Router } from "harpia";
+import { Router } from "@harpia/core";
 
 const books = Router("books");
 
@@ -165,7 +165,7 @@ export default books;
 Creating a websocket route
 
 ```typescript
-import { Router } from "harpia";
+import { Router } from "@harpia/core";
 
 const routes = Router();
 
@@ -223,7 +223,7 @@ export default routes;
 Import the route into the main application.
 
 ```typescript
-import harpia from "harpia";
+import harpia from "@harpia/core";
 import books from "./books.routes";
 
 const app = harpia();
@@ -261,7 +261,7 @@ app.use("/panel", (req, res, next) => {
 **Set a middleware to a specific route**
 
 ```typescript
-import { Router } from "harpia";
+import { Router } from "@harpia/core";
 
 const books = Router();
 
@@ -284,7 +284,7 @@ Each connection creates its own `ServerWebSocket` instance, which can hold **cus
 You can create WebSocket routes using either the **application instance (`app`)** or a **router instance (`Router`)**:
 
 ```typescript
-import { Router } from "harpia";
+import { Router } from "@harpia/core";
 
 const routes = Router();
 
@@ -294,7 +294,7 @@ routes.ws("/chat", { /** handlers */ });
 or
 
 ```typescript
-import harpia from "harpia";
+import harpia from "@harpia/core";
 
 const app = harpia();
 
@@ -397,7 +397,7 @@ Create a file for engine configuration:
 // src/ejs.ts
 import ejs from "ejs";
 import path from "node:path";
-import type { Harpia } from "harpia";
+import type { Harpia } from "@harpia/core";
 
 export const ejsEngine = {
   configure: (app: Harpia) => {
@@ -413,7 +413,7 @@ export const ejsEngine = {
 
 Set up the application to use the engine:
 ```typescript
-import harpia from "harpia";
+import harpia from "@harpia/core";
 import { ejsEngine } from "./ejs";
 
 const app = harpia();
@@ -481,7 +481,7 @@ app.listen...
 
 If you want to use the [Security Header Protection](#security-headers-shield):
 ```typescript
-import { harpia } from "harpia";
+import { harpia } from "@harpia/core";
 import { shield } from "./shield";
 import { engine } from "./template-engine";
 
@@ -689,7 +689,7 @@ You can define CORS settings globally for the entire application or specify them
 To set up basic CORS for your application:
 
 ```typescript
-import harpia from "harpia";
+import harpia from "@harpia/core";
 
 const app = harpia();
 
@@ -707,7 +707,7 @@ app.listen...
 You can also apply different CORS configurations to specific routes or groups of routes.
 
 ```typescript
-import harpia, { Router } from "harpia";
+import harpia, { Router } from "@harpia/core";
 
 const books = Router();
 
@@ -777,7 +777,7 @@ You can use this to store session information, authentication tokens, or any oth
 To set a cookie, you can use the `res.cookies.set` method. You can specify various options such as expiration date, domain, path, and security settings.
 
 ```typescript
-import harpia, { type CookiesOptions } from "harpia";
+import harpia, { type CookiesOptions } from "@harpia/core";
 
 const app = harpia();
 
@@ -869,8 +869,7 @@ Harpia includes a `Cache` class that allows you to store and manage cached data 
 To create a new cache instance, simply instantiate the `Cache` class. You can optionally provide a custom `store` (e.g., using a custom memory store or a third-party store like Redis).
 
 ```typescript
-import harpia from "harpia";
-import { Cache } from "harpia/cache";
+import harpia, { Cache } from "@harpia/core";
 
 const app = harpia();
 const cache = new Cache();
@@ -881,8 +880,7 @@ const cache = new Cache();
 You can store data in the cache or retrieve it from the cache within route handlers. Here's an example of caching a value in a route and retrieving it from the cache in a different route:
 
 ```typescript
-import harpia from "harpia";
-import { Cache } from "harpia/cache";
+import harpia, { Cache } from "@harpia/core";
 
 const app = harpia();
 const cache = new Cache();
@@ -959,8 +957,7 @@ Harpia includes a `Session` class that allows you to manage user sessions. The `
 To use the session management functionality, you first need to create an instance of the `Session` class.
 
 ```typescript
-import harpia from "harpia";
-import { Session } from "harpia/session";
+import harpia, { Session } from "@harpia/core";
 
 const app = harpia();
 const session = new Session();
@@ -1372,7 +1369,7 @@ export const shield = {
 Apply the shield middleware in your server setup:
 
 ```typescript
-import { harpia } from "harpia";
+import { harpia } from "@harpia/core";
 import { shield } from "./shield";
 
 const app = harpia();
@@ -1391,7 +1388,7 @@ app.listen({ port: 3000 }, () => console.log("Server running on http://localhost
 If you want to use the harpia template engine:
 
 ```typescript
-import { harpia } from "harpia";
+import { harpia } from "@harpia/core";
 import { shield } from "./shield";
 import { engine } from "./template-engine";
 
@@ -1722,8 +1719,7 @@ export class RedisStore implements Store {
 Once you've set up the `RedisStore`, you can use it in your routes to manage sessions. Below is an example of how to use Redis to manage user sessions in a Harpia app:
 
 ```typescript
-import { Router } from "harpia";
-import { Session } from "harpia/session";
+import { Router, Session } from "@harpia/core";
 import { RedisStore } from "redis.ts";
 
 // Redis Setup
