@@ -1261,37 +1261,47 @@ app.get("/metrics", async (req, res) => {
 Create a redis.ts file:
 ```typescript
 import type { Store } from "@harpia/core";
-import Redis from "ioredis";
+import { RedisClient } from "bun";
 
 export class RedisStore implements Store {
-  private client: Redis;
+  private client: RedisClient;
+  private ready: Promise<void>;
 
   constructor(db?: number) {
-    this.client = new Redis({
-      host: process.env.REDIS_HOST || "localhost",
-      username: process.env.REDIS_USER || "",
-      password: process.env.REDIS_PASS || "",
-      port: Number(process.env.REDIS_PORT) || 6379,
-      db: db || 0,
-      lazyConnect: true,
+    const host = process.env.REDIS_HOST || "localhost";
+    const port = process.env.REDIS_PORT || "6379";
+    const user = process.env.REDIS_USER || "";
+    const pass = process.env.REDIS_PASS || "";
+    const auth = user || pass ? `${encodeURIComponent(user)}:${encodeURIComponent(pass)}@` : "";
+    let url = `redis://${auth}${host}:${port}`;
+
+    if (db !== undefined && db !== 0) {
+      url = `${url.replace(/\/\d+$/, "")}/${db}`;
+    }
+
+    this.client = new RedisClient(url, {
+      autoReconnect: true,
+      maxRetries: 10,
+      connectionTimeout: 10000,
     });
 
-    this.client.on("connect", () => console.log("Connected to Redis"));
-    this.client.on("error", (err) => console.error("Redis error:", err));
-    this.client.connect().catch((err) => console.error("Failed to connect to Redis:", err));
+    this.client.onconnect = () => console.log("Connected to Redis");
+    this.client.onclose = (err) => console.error("Redis error:", err);
+
+    this.ready = this.client.connect();
   }
 
   async on(): Promise<boolean> {
-    if (this.client.on("connect", () => true)) {
-      return true;
+    try {
+      await this.ready;
+      return this.client.connected;
+    } catch {
+      return false;
     }
-
-    return false;
   }
 
   async get(key: string): Promise<Record<string, any> | undefined> {
     const data = await this.client.get(key);
-
     return data ? JSON.parse(data) : undefined;
   }
 
@@ -1299,11 +1309,14 @@ export class RedisStore implements Store {
     await this.client.set(key, JSON.stringify(data));
   }
 
+  async setEx(key: string, data: any, ttlSeconds: number): Promise<void> {
+    await this.client.send("SET", [key, JSON.stringify(data), "EX", String(ttlSeconds)]);
+  }
+
   async delete(key: string): Promise<void> {
     await this.client.del(key);
   }
 }
-
 ```
 
 And use it like this:
@@ -1646,42 +1659,56 @@ The Redis Storage provides a persistent key-value store using Redis. It implemen
 **Implementation**
 ```typescript
 import type { Store } from "@harpia/core";
-import Redis from "ioredis";
+import { RedisClient } from "bun";
 
 export class RedisStore implements Store {
-  private client: Redis;
+  private client: RedisClient;
+  private ready: Promise<void>;
 
   constructor(db?: number) {
-    this.client = new Redis({
-      host: process.env.REDIS_HOST || "localhost",
-      username: process.env.REDIS_USER || "",
-      password: process.env.REDIS_PASS || "",
-      port: Number(process.env.REDIS_PORT) || 6379,
-      db: db || 0,
-      lazyConnect: true,
+    const host = process.env.REDIS_HOST || "localhost";
+    const port = process.env.REDIS_PORT || "6379";
+    const user = process.env.REDIS_USER || "";
+    const pass = process.env.REDIS_PASS || "";
+    const auth = user || pass ? `${encodeURIComponent(user)}:${encodeURIComponent(pass)}@` : "";
+    let url = `redis://${auth}${host}:${port}`;
+
+    if (db !== undefined && db !== 0) {
+      url = `${url.replace(/\/\d+$/, "")}/${db}`;
+    }
+
+    this.client = new RedisClient(url, {
+      autoReconnect: true,
+      maxRetries: 10,
+      connectionTimeout: 10000,
     });
 
-    this.client.on("connect", () => console.log("Connected to Redis"));
-    this.client.on("error", (err) => console.error("Redis error:", err));
-    this.client.connect().catch((err) => console.error("Failed to connect to Redis:", err));
+    this.client.onconnect = () => console.log("Connected to Redis");
+    this.client.onclose = (err) => console.error("Redis error:", err);
+
+    this.ready = this.client.connect();
   }
 
   async on(): Promise<boolean> {
-    if (this.client.on("connect", () => true)) {
-      return true;
+    try {
+      await this.ready;
+      return this.client.connected;
+    } catch {
+      return false;
     }
-
-    return false;
   }
 
   async get(key: string): Promise<Record<string, any> | undefined> {
     const data = await this.client.get(key);
-
     return data ? JSON.parse(data) : undefined;
   }
 
   async set(key: string, data: any): Promise<void> {
     await this.client.set(key, JSON.stringify(data));
+  }
+
+  async setEx(key: string, data: any, ttlSeconds: number): Promise<void> {
+    await this.client.send("SET", [key, JSON.stringify(data), "EX", String(ttlSeconds)]);
   }
 
   async delete(key: string): Promise<void> {
