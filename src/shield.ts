@@ -1,6 +1,5 @@
 import type { Request } from "./request";
 import type { Response } from "./response";
-import type { Application } from "./server";
 import type { SecurityHeaders } from "./types/shield";
 
 export type { SecurityHeaders } from "./types/shield";
@@ -180,8 +179,8 @@ export class Shield {
     }
   }
 
-  private getClientIP(req: Request, server: Application): string {
-    const serverIp = server.requestIP();
+  private getClientIP(req: Request, getIp: (req: Request) => string | null): string {
+    const serverIp = getIp(req);
 
     if (!serverIp && this.trustProxy) {
       return (
@@ -195,9 +194,9 @@ export class Shield {
     return serverIp || "unknown";
   }
 
-  public middleware(server: Application) {
+  public middleware(getIp: (req: Request) => string | null) {
     return (req: Request, res: Response, next: () => void) => {
-      const ip = this.getClientIP(req, server);
+      const ip = this.getClientIP(req, getIp);
       const nonce = this.generateNonce();
 
       this.setNonce(ip, nonce);

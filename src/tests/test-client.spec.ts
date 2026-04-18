@@ -1,6 +1,11 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
 import type { Application } from "../server";
 import { TestClient } from "../test-client";
+import { join } from "node:path";
+import { mkdir, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+
+const TEST_DIR = join(os.tmpdir(), "harpia-test-client");
 
 const mockProcessRequest = mock(async () => ({
   status: 200,
@@ -16,17 +21,18 @@ const mockApp = {
   processRequest: mockProcessRequest,
 } as unknown as Application;
 
-const originalFile = Bun.file;
-Bun.file = ((path: string | URL, options?: BlobPropertyBag) => {
-  const file = originalFile(path, options);
-  return {
-    ...file,
-    exists: async () => Promise.resolve(path.toString() === "/valid/path"),
-  };
-}) as typeof Bun.file;
-
 describe("TestClient", () => {
   let client: TestClient;
+  const validPath = join(TEST_DIR, "valid-file.txt");
+
+  beforeAll(async () => {
+    await mkdir(TEST_DIR, { recursive: true });
+    await writeFile(validPath, "content");
+  });
+
+  afterAll(async () => {
+    await rm(TEST_DIR, { recursive: true, force: true });
+  });
 
   beforeEach(() => {
     client = new TestClient(mockApp);
@@ -34,7 +40,6 @@ describe("TestClient", () => {
 
   afterEach(() => {
     mockProcessRequest.mockClear();
-    Bun.file = originalFile;
   });
 
   describe("HTTP Methods", () => {
@@ -147,12 +152,26 @@ describe("TestClient", () => {
       expect(client["body"]).toBeInstanceOf(FormData);
     });
 
+    test("should handle single file upload with valid path", () => {
+      client.post("/upload").file({ file: validPath });
+      expect(client["body"]).toBeInstanceOf(FormData);
+    });
+
     test("should handle multiple files", () => {
       client.post("/upload").files({ docs: [mockBlob, mockBlob] });
       expect(client["body"]).toBeInstanceOf(FormData);
     });
 
-    test("should throw error for invalid file type", () => {
+    test("should handle multiple files with valid path", () => {
+      client.post("/upload").files({ docs: [validPath, mockBlob] });
+      expect(client["body"]).toBeInstanceOf(FormData);
+    });
+
+    test("should throw error for invalid file type in files()", () => {
+      expect(() => client.files({ docs: [123 as unknown as Blob] })).toThrow('Invalid file type for key "docs"');
+    });
+
+    test("should throw error for invalid file type in file()", () => {
       expect(() => client.file({ file: 123 as unknown as Blob })).toThrow('Invalid file type for key "file"');
     });
 
@@ -182,6 +201,10 @@ describe("TestClient", () => {
     test("should prevent mixed content types", () => {
       client.formData({});
       expect(() => client.json({})).toThrow("Cannot use json() after formData()");
+    });
+
+    test("should validate file existence in files()", async () => {
+      expect(() => client.files({ docs: ["/invalid/path"] })).toThrow("File not found at path: /invalid/path");
     });
 
     test("should validate file existence", async () => {

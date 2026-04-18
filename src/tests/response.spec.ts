@@ -59,6 +59,22 @@ describe("Response", () => {
     expect(parsedResponse.headers.get("Set-Cookie")).toBe("name=value");
   });
 
+  it("should delete a cookie", () => {
+    response.cookies.delete("name");
+    const parsedResponse = response.parse();
+    const cookie = parsedResponse.headers.get("Set-Cookie");
+    expect(cookie).toContain("name=;");
+    expect(cookie).toContain("Max-Age=0");
+  });
+
+  it("should delete a cookie with options", () => {
+    response.cookies.delete("name", { domain: "example.com" });
+    const parsedResponse = response.parse();
+    const cookie = parsedResponse.headers.get("Set-Cookie");
+    expect(cookie).toContain("name=;");
+    expect(cookie).toContain("Domain=example.com");
+  });
+
   it("should set multiple cookies", () => {
     response.cookies.set("name1", "value1");
     response.cookies.set("name2", "value2");

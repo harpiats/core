@@ -8,6 +8,7 @@ import { Response } from "./response";
 import { Router } from "./router";
 import { WebSocket } from "./websocket";
 import { checkNpmVersion } from "./utils/npm-check";
+import { Shield } from "./shield";
 
 import type { Server } from "bun";
 import type { FetchRequest } from "./request";
@@ -17,6 +18,7 @@ import type { Engine } from "./types/engine";
 import type { Handler, HandlerResult } from "./types/handler";
 import type { NotFoundTypes } from "./types/not-found";
 import type { MethodOptions } from "./types/router";
+import type { SecurityHeaders } from "./types/shield";
 import type { ServerOptions } from "./types/server";
 import type { WebSocketHandlers } from "./types/websocket";
 
@@ -27,6 +29,7 @@ export class Application {
   private router: Router;
   private middlewares: Middleware;
   private corsInstance: Cors;
+  private shieldInstance: Shield | null = null;
   private notFound: NotFoundTypes = null;
   private staticPath: string | null = null;
   private templateEngine: Engine | null = null;
@@ -146,6 +149,16 @@ export class Application {
 
   public cors(options?: CorsOptions) {
     this.corsInstance.options = options || null;
+  }
+
+  public shield(options?: SecurityHeaders): void {
+    this.shieldInstance = new Shield(options);
+    this.use(this.shieldInstance.middleware((req) => this.requestIP()));
+  }
+
+  public getNonce(): string | null {
+    if (!this.shieldInstance) return null;
+    return this.shieldInstance.getNonce(this.requestIP() || "unknown");
   }
 
   public setNotFound(handler: Handler, methods?: MethodOptions[]): void {

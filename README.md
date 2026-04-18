@@ -4,10 +4,9 @@ Harpia Core is the foundational module of the Harpia Framework, designed exclusi
 
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-%3E%3D%205.x-blue.svg)](https://www.typescriptlang.org/)
-
 [![Bun](https://img.shields.io/badge/Bun-%3E%3D%201.x-blue.svg)](https://bun.sh/)
-
 [![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](https://github.com/@harpia/core/core/blob/main/LICENSE)
+[![Coverage](https://img.shields.io/badge/Coverage-100%25-brightgreen.svg)]()
 
 
 Table of Contents
@@ -481,7 +480,7 @@ app.listen...
 
 If you want to use the [Security Header Protection](#security-headers-shield):
 ```typescript
-import { harpia } from "@harpia/core";
+import harpia from "@harpia/core";
 import { shield } from "./shield";
 import { engine } from "./template-engine";
 
@@ -643,7 +642,7 @@ When using the Shield module for security headers, the template engine automatic
 </script>
 ```
 
-> The `generateNonce` plugin is only available when the Shield instance is passed to the engine.configure method. See the [Shield](#security-headers-shield) section for setup instructions.
+> The `generateNonce` plugin is automatically available when `app.shield()` is configured in the application. See the [Shield](#security-headers-shield) section for setup instructions.
 
 ### Method Override
 The Method Override technique is commonly used to simulate HTTP methods like `PUT`, `DELETE`, and `PATCH` in web applications where the client (e.g., browsers) may not natively support these methods. This is particularly useful when working with HTML forms, which only support `GET` and `POST` methods.
@@ -1350,32 +1349,20 @@ The Shield module is designed to enhance the security of your application by aut
     - Seamless integration with the template engine.
 
 #### Basic Usage
-Create a Shield Instance with shield.ts file to initialize and export the middleware:
+Configure your security headers and apply them to the application using the native `app.shield()` method.
 
 ```typescript
-import { Shield } from "@harpia/core/shield";
-import type { Harpia } from "@harpia/core";
-
-const instance = new Shield({
-  useNonce: true, // Enable nonce generation, false as default.
-});
-
-export const shield = {
-  middleware: (server: Harpia) => instance.middleware(server),
-  instance: instance,
-}
-```
-
-Apply the shield middleware in your server setup:
-
-```typescript
-import { harpia } from "@harpia/core";
-import { shield } from "./shield";
+import harpia from "@harpia/core";
+import type { SecurityHeaders } from "@harpia/core";
 
 const app = harpia();
 
-// Apply security headers middleware
-app.use(shield.middleware());
+const shieldOptions: SecurityHeaders = {
+  useNonce: true, // Enable nonce generation, false as default.
+};
+
+// Apply security headers
+app.shield(shieldOptions);
 
 // Your routes
 app.get("/", (req, res) => {
@@ -1385,29 +1372,29 @@ app.get("/", (req, res) => {
 app.listen({ port: 3000 }, () => console.log("Server running on http://localhost:3000"));
 ```
 
-If you want to use the harpia template engine:
+If you want to use the Harpia template engine, the `generateNonce` plugin is automatically registered when `app.shield()` is initialized:
 
 ```typescript
-import { harpia } from "@harpia/core";
-import { shield } from "./shield";
+import harpia from "@harpia/core";
 import { engine } from "./template-engine";
 
 const app = harpia();
 
-// Apply security headers middleware
-app.use(shield.middleware(app));
+// Apply security headers
+app.shield({ useNonce: true });
 
 // Setup template engine
-engine.configure(app, shield.instance);
+engine.configure(app);
 ```
 
-> To understand more about the harpia template engine, see the [Template Engine](#template-engine) section.
+> To understand more about the Harpia template engine, see the [Template Engine](#template-engine) section.
 
 #### Customizing Security Headers
-You can customize the security headers by passing options to the Shield constructor:
+You can customize the security headers by passing options to `app.shield`:
 
 ```typescript
-const instance = new Shield({
+app.shield({
+  useNonce: true,
   contentSecurityPolicy: {
     directives: {
       "default-src": ["'self'", "https://trusted.com"],
@@ -1420,11 +1407,6 @@ const instance = new Shield({
     preload: true,
   },
 });
-
-export const shield = {
-  middleware: (server: Harpia) => instance.middleware(server),
-  instance: instance,
-};
 ```
 
 #### Use nonce in templates:

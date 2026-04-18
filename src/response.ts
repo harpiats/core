@@ -120,7 +120,8 @@ class ResponseWrapper {
   }
 
   private deleteCookie(name: string, options?: CookiesOptions): this {
-    this.cookiesInstance.delete(name, options);
+    const deletedCookie = this.cookiesInstance.delete(name, options);
+    this.headersInstance.append("Set-Cookie", deletedCookie);
 
     return this;
   }

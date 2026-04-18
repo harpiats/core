@@ -3,7 +3,6 @@ import path, { join } from "node:path";
 import { colorize } from "./utils/colorize";
 
 import type { Application } from "./server";
-import type { Shield } from "./shield";
 import type { Engine, RenderPromise } from "./types/engine";
 import type { Blocks, Data, Options, PluginFunction } from "./types/template-engine";
 
@@ -30,15 +29,12 @@ export class TemplateEngine implements Engine {
     };
   }
 
-  public configure(app: Application, shield?: Shield): void {
+  public configure(app: Application): void {
     app.engine.set(this);
 
-    if (shield) {
-      this.plugins["generateNonce"] = () => {
-        const ip = app.requestIP() || "";
-        return shield.getNonce(ip);
-      };
-    }
+    this.plugins["generateNonce"] = () => {
+      return app.getNonce() || "";
+    };
   }
 
   public module(moduleName: string): this {
@@ -66,8 +62,9 @@ export class TemplateEngine implements Engine {
     const promise = execute() as RenderPromise;
 
     // Attach a minification method chained to the render execution
-    promise.minify = (type: "html" | "generic" = "html") => {
-      return promise.then(() => this.minify(type));
+    promise.minify = async (type: "html" | "generic" = "html") => {
+      await promise;
+      return this.minify(type);
     };
 
     return promise;

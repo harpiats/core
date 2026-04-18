@@ -9,6 +9,7 @@ import type { Application } from "../server";
 import { WebSocket } from "../websocket";
 
 import type { MethodOptions } from "src/types/router";
+import type { Engine } from "../types/engine";
 
 describe("Server", () => {
   let app: Application;
@@ -229,6 +230,40 @@ describe("Server", () => {
     });
   });
 
+  describe("shield", () => {
+    it("should initialize shieldInstance and register middleware", () => {
+      const useSpy = spyOn(app as any, "use").mockImplementation((middleware: any) => {
+        if (typeof middleware === "function") {
+          middleware({} as any, new Response() as any, () => {});
+        }
+      });
+      const requestIPSpy = spyOn(app as any, "requestIP").mockReturnValue("127.0.0.1");
+
+      app.shield({ useNonce: true });
+      expect((app as any).shieldInstance).toBeDefined();
+      expect(useSpy).toHaveBeenCalled();
+      expect(requestIPSpy).toHaveBeenCalled();
+
+      useSpy.mockRestore();
+      requestIPSpy.mockRestore();
+    });
+
+    it("should return nonce if shield is configured", () => {
+      app.shield({ useNonce: true });
+      (app as any).ipAdress = "192.168.1.1";
+
+      const middleware = (app as any).shieldInstance.middleware((req: any) => "192.168.1.1");
+      middleware({} as any, new Response() as any, () => {});
+
+      const nonce = app.getNonce();
+      expect(nonce).toMatch(/^[a-f0-9]{64}$/);
+    });
+
+    it("should return null nonce if shield is not configured", () => {
+      expect(app.getNonce()).toBeNull();
+    });
+  });
+
   describe("static", () => {
     it("should set the static path", () => {
       app.static("/public");
@@ -332,7 +367,10 @@ describe("Server", () => {
     });
 
     it("should return a response if cors is not allowed", async () => {
-      spyOn((app as any).corsInstance, "setCors").mockImplementation(() => false);
+      spyOn((app as any).corsInstance, "setCors").mockImplementation((req: any, res: any, next: any) => {
+        if (next) next();
+        return false;
+      });
       (app as any).corsInstance.options = { origin: "http://example.com" };
       const result = await (app as any).handleRequest(mockRequest, mockServer);
       expect(result).toBeDefined();
@@ -392,23 +430,87 @@ describe("Server", () => {
     });
 
     it("should execute the controller", async () => {
-      const controller = mock();
+      const controller = mock(async (req: any, res: any, next: any) => {
+        if (next) await next();
+      });
       (app as any).router.get("/test", controller);
       await (app as any).handleRequest(mockRequest, mockServer);
       expect(controller).toHaveBeenCalled();
     });
   });
 
+  describe("executeHandlers", () => {
+    it("should return true if no handlers are provided", async () => {
+      const result = await (app as any).executeHandlers([], mockRequest, new Response());
+      expect(result).toBe(true);
+    });
+
+    it("should throw error if handler is not a function", async () => {
+      expect((app as any).executeHandlers(["not a function"], mockRequest, new Response())).rejects.toThrow("Middleware handler must be a function.");
+    });
+
+    it("should call handlers in order and proceed if next() is called", async () => {
+      const order: number[] = [];
+      const h1 = async (req: any, res: any, next: any) => {
+        order.push(1);
+        await next();
+      };
+      const h2 = async (req: any, res: any, next: any) => {
+        order.push(2);
+        await next();
+      };
+      const result = await (app as any).executeHandlers([h1, h2], mockRequest, new Response());
+      expect(order).toEqual([1, 2]);
+      expect(result).toBeUndefined();
+    });
+
+    it("should return false if next() is not called and handler does not return Response", async () => {
+      const h1 = async (req: any, res: any, next: any) => {
+        // next not called
+      };
+      const result = await (app as any).executeHandlers([h1], mockRequest, new Response());
+      expect(result).toBe(false);
+    });
+
+    it("should return Response if a handler returns Response", async () => {
+      const customResponse = new Response();
+      const h1 = async (req: any, res: any, next: any) => {
+        return customResponse;
+      };
+      const result = await (app as any).executeHandlers([h1], mockRequest, new Response());
+      expect(result).toBe(customResponse);
+    });
+
+    it("should throw error if next() is called multiple times", async () => {
+      const h1 = async (req: any, res: any, next: any) => {
+        await next();
+        await next();
+      };
+      expect((app as any).executeHandlers([h1], mockRequest, new Response())).rejects.toThrow("next() called multiple times");
+    });
+    
+    it("should throw an error if error is passed to next()", async () => {
+      const h1 = async (req: any, res: any, next: any) => {
+        await next(new Error("Next error"));
+      };
+      expect((app as any).executeHandlers([h1], mockRequest, new Response())).rejects.toThrow("Next error");
+    });
+  });
+
   describe("resolveNotFound", () => {
     it("should call the not found handler", () => {
-      const handler = mock();
+      const handler = mock((req: any, res: any, next: any) => {
+        if (next) next();
+      });
       app.setNotFound(handler);
       (app as any).resolveNotFound(mockRequest, mockResponse, "/test");
       expect(handler).toHaveBeenCalled();
     });
 
     it("should call the not found handler if the method matches", () => {
-      const handler = mock();
+      const handler = mock((req: any, res: any, next: any) => {
+        if (next) next();
+      });
       const methods = ["GET"] as MethodOptions[];
 
       app.setNotFound(handler, methods);
@@ -518,6 +620,18 @@ describe("Server", () => {
 
     it("should return null if no template engine is set", () => {
       expect((app as any).getTemplateEngine()).toBeNull();
+    });
+  });
+
+  describe("engine alias", () => {
+    it("should set and get the template engine via app.engine", () => {
+      const engine: Engine = {
+        render: () => Object.assign(Promise.resolve(""), { minify: async () => "" }),
+        configure: () => {},
+      };
+
+      app.engine.set(engine);
+      expect(app.engine.get()).toBe(engine);
     });
   });
 });

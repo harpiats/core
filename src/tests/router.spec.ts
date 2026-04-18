@@ -194,4 +194,27 @@ describe("Router", () => {
     const routerWithoutSlash = new Router("api");
     expect(routerWithoutSlash.getPrefix()).toBe("/api");
   });
+
+  it("should register ws routes without prefix", () => {
+    const subRouter = new Router();
+    subRouter.ws("/chat", { open: () => {} } as any);
+
+    router.register({ routes: [], wsRoutes: subRouter.wsList() });
+
+    const wsRoutes = router.wsList();
+    expect(wsRoutes).toHaveLength(1);
+    expect(wsRoutes[0].path).toBe("/chat");
+  });
+
+  it("should register ws routes with prefix", () => {
+    const subRouter = new Router("/api");
+    const prefix = subRouter.getPrefix();
+    subRouter.ws("/chat", { open: () => {} } as any);
+
+    router.register({ prefix, routes: [], wsRoutes: subRouter.wsList() });
+
+    const wsRoutes = router.wsList();
+    expect(wsRoutes).toHaveLength(1);
+    expect(wsRoutes[0].path).toBe("/api/chat");
+  });
 });

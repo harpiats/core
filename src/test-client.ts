@@ -154,9 +154,7 @@ export class TestClient {
       for (const value of values) {
         if (typeof value === "string") {
           const file = Bun.file(value);
-          const fileExists = file.exists().then((exists) => exists);
-
-          if (!fileExists) {
+          if (!file.size) {
             throw new Error(`File not found at path: ${value}`);
           }
 
