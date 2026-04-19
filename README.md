@@ -27,7 +27,7 @@ Table of Contents
   - [Session](#session)
   - [CSRF](#csrf)
   - [Upload](#upload)
-  - [Request Monitor](#request-monitor)
+  - [Telemetry](#telemetry)
   - [Security Headers (Shield)](#security-headers-shield)
   - [Test Client](#test-client)
   - [Memory Storage](#memory-storage)
@@ -1187,143 +1187,329 @@ app.post("/user", upload.multiple, async (req, res) => {
 });
 ```
 
-### Request monitor
-The Request Monitor tracks and analyzes request metrics, including visitor data, traffic sources, response times, and errors. It helps monitor application performance and user behavior.
+### Telemetry
 
-**Setting Up the Request Monitor**
-First, instantiate the RequestMonitor and configure it with a storage mechanism (e.g., MemoryStore). You can also define routes to ignore, such as favicon.ico.
+Harpia includes a built-in `Telemetry` module that acts as an observability-as-a-service tool. It tracks server traffic, page views, response times, errors, and visitor behavior out of the box, offering a comprehensive Reading API to build internal dashboards without needing third-party analytics tools.
 
-```typescript
-import type { NextFunction, Request, Response } from "@harpia/core";
-import { MemoryStore } from "@harpia/core/memory-store";
-import { RequestMonitor } from "@harpia/core/monitor";
-import { app } from "start/server";
+Each visit is stored as a unified `VisitData` object, keeping path, timestamp, response time, error details, and traffic source together in a single, self-contained record.
 
-// Initialize the RequestMonitor
-export const Monitor = new RequestMonitor({
-  store: new MemoryStore(), // Use MemoryStore for storing metrics
-  ignore: ["favicon.ico"], // Ignore specific routes
-});
+#### Setup
 
-// Middleware to track requests
-export const monitor = (req: Request, res: Response, next: NextFunction) => {
-  if (process.env.ENV === "test") {
-    return next(); // Skip monitoring in test environment
-  }
-
-  // Extract traffic source data from the request
-  const trafficSource = {
-    utm: {
-      id: req.query?.utm_id,
-      source: req.query?.utm_source,
-      medium: req.query?.utm_medium,
-      campaign: req.query?.utm_campaign,
-      sourcePlatform: req.query?.utm_source_platform,
-      term: req.query?.utm_term,
-      content: req.query?.utm_content,
-      creativeFormat: req.query?.utm_creative_format,
-      marketingTactic: req.query?.utm_marketing_tactic,
-    },
-    referer: req.headers.get("referer") || undefined, // Referer header
-    userAgent: req.headers.get("User-Agent") || undefined, // User-Agent header
-  };
-
-  // Initialize monitoring for the request
-  Monitor.initialize(req, app.requestIP() as string, trafficSource);
-  Monitor.handleRequest();
-
-  next(); // Proceed to the next middleware or route handler
-};
-```
-
-**Using the Request Monitor**
-Add the monitor middleware to your application. You can access metrics via a dedicated route, such as /metrics.
+Instantiate the `Telemetry` class and add `handleRequest` as a global middleware:
 
 ```typescript
+import harpia, { Telemetry } from "@harpia/core";
+
 const app = harpia();
 
-// Add the monitor middleware
-app.use(monitor);
+const telemetry = new Telemetry({
+  ignore: ["/favicon.ico", "/healthcheck"], // Paths to exclude from monitoring
+  trustProxy: true, // Enable if behind Nginx/Cloudflare to resolve real IPs
+});
 
-// Route to fetch metrics
-app.get("/metrics", async (req, res) => {
-  const metrics = await Monitor.getMetrics();
-  console.log(metrics);
-  res.json(metrics); // Return metrics as JSON
+app.use(async (req, res, next) => {
+  await telemetry.initialize(req, app.requestIP() || "unknown");
+  const telemetryRes = await telemetry.handleRequest();
+  if (telemetryRes) return telemetryRes;
+  next();
 });
 ```
 
-**Using Redis as a Store**
-Create a redis.ts file:
+#### Tracking Traffic Sources
+
+Pass a `TrafficSource` object as the third argument to `initialize()` to record UTM attribution data per visit:
+
 ```typescript
-import type { Store } from "@harpia/core";
-import { RedisClient } from "bun";
+app.use(async (req, res, next) => {
+  const url = new URL(req.url);
+  const trafficSource = {
+    utm: {
+      source: url.searchParams.get("utm_source") ?? undefined,
+      medium: url.searchParams.get("utm_medium") ?? undefined,
+    },
+  };
 
-export class RedisStore implements Store {
-  private client: RedisClient;
-  private ready: Promise<void>;
+  await telemetry.initialize(req, app.requestIP() || "unknown", trafficSource);
+  const telemetryRes = await telemetry.handleRequest();
+  if (telemetryRes) return telemetryRes;
+  next();
+});
+```
 
-  constructor(db?: number) {
-    const host = process.env.REDIS_HOST || "localhost";
-    const port = process.env.REDIS_PORT || "6379";
-    const user = process.env.REDIS_USER || "";
-    const pass = process.env.REDIS_PASS || "";
-    const auth = user || pass ? `${encodeURIComponent(user)}:${encodeURIComponent(pass)}@` : "";
-    let url = `redis://${auth}${host}:${port}`;
+#### Security
 
-    if (db !== undefined && db !== 0) {
-      url = `${url.replace(/\/\d+$/, "")}/${db}`;
+Protect the Reading API with a token and/or an allowlist of IPs:
+
+```typescript
+const telemetry = new Telemetry({
+  accessToken: process.env.TELEMETRY_TOKEN,
+  allowedIps: ["127.0.0.1", "10.0.0.5"],
+});
+```
+
+Pass `token` and `callerIp` inside the parameter object of any read method. An invalid token or disallowed IP will throw an `Unauthorized` error.
+
+#### `Options` Reference
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `store` | `Store` *(optional)* | Custom storage backend. Defaults to `MemoryStore`. Use `RedisStore` for persistence across restarts. |
+| `ignore` | `string[]` *(optional)* | Paths to skip tracking. |
+| `trustProxy` | `boolean` *(optional)* | When `true`, resolves the real client IP from `x-forwarded-for`, `cf-connecting-ip`, or `x-real-ip` headers. |
+| `maxVisitorsKeys` | `number` *(optional)* | Maximum number of unique IPs stored per day. Defaults to `5000`. |
+| `accessToken` | `string` *(optional)* | Secret token required on all read methods. |
+| `allowedIps` | `string[]` *(optional)* | Allowlist of IPs permitted to call read methods. |
+
+#### Reading API
+
+All methods accept a **single configuration object**. Security properties (`token`, `callerIp`) are always optional inside this object.
+
+---
+
+##### `getAll({ token?, callerIp? })`
+
+Returns the complete raw telemetry data stored in the backend.
+
+```typescript
+const data = await telemetry.getAll({ token, callerIp });
+```
+
+```json
+{
+  "access": {
+    "totalRequests": 1500,
+    "visitorsByDate": {
+      "2023-10-25": {
+        "192.168.1.1": {
+          "totalRequests": 2,
+          "visits": [
+            { "path": "/home", "timestamp": "2023-10-25T14:00:00.000Z", "responseTime": 45, "error": null },
+            { "path": "/about", "timestamp": "2023-10-25T14:01:00.000Z", "responseTime": 30, "error": null }
+          ]
+        }
+      }
     }
-
-    this.client = new RedisClient(url, {
-      autoReconnect: true,
-      maxRetries: 10,
-      connectionTimeout: 10000,
-    });
-
-    this.client.onconnect = () => console.log("Connected to Redis");
-    this.client.onclose = (err) => console.error("Redis error:", err);
-
-    this.ready = this.client.connect();
-  }
-
-  async on(): Promise<boolean> {
-    try {
-      await this.ready;
-      return this.client.connected;
-    } catch {
-      return false;
-    }
-  }
-
-  async get(key: string): Promise<Record<string, any> | undefined> {
-    const data = await this.client.get(key);
-    return data ? JSON.parse(data) : undefined;
-  }
-
-  async set(key: string, data: any): Promise<void> {
-    await this.client.set(key, JSON.stringify(data));
-  }
-
-  async setEx(key: string, data: any, ttlSeconds: number): Promise<void> {
-    await this.client.send("SET", [key, JSON.stringify(data), "EX", String(ttlSeconds)]);
-  }
-
-  async delete(key: string): Promise<void> {
-    await this.client.del(key);
-  }
+  },
+  "behavior": { "pageViews": { "/home": 850, "/about": 320 } }
 }
 ```
 
-And use it like this:
+---
+
+##### `summary({ date?, limit?, token?, callerIp? })`
+
+Returns a high-level daily overview. `limit` controls the number of top pages returned (default: `10`).
 
 ```typescript
-import { RedisStore } from "./redis";
+const stats = await telemetry.summary({ limit: 5, token, callerIp });
+```
 
-export const Monitor = new RequestMonitor({
-  store: new RedisStore(), // Use RedisStore for storing metrics
-  ignore: ["favicon.ico"], // Ignore specific routes
-});
+```json
+{
+  "date": "2023-10-25",
+  "totalRequests": 1500,
+  "uniqueVisitors": 320,
+  "topPages": [
+    { "path": "/home", "views": 850 },
+    { "path": "/about", "views": 320 }
+  ],
+  "avgResponseTime": 42.5,
+  "totalErrors": 2
+}
+```
+
+---
+
+##### `getDailyStats({ token?, callerIp? })`
+
+Returns an array with aggregated request and visitor counts per day. Ideal for trend charts.
+
+```typescript
+const stats = await telemetry.getDailyStats({ token, callerIp });
+```
+
+```json
+[
+  { "date": "2023-10-23", "totalRequests": 980, "uniqueVisitors": 210 },
+  { "date": "2023-10-24", "totalRequests": 1200, "uniqueVisitors": 280 }
+]
+```
+
+---
+
+##### `getVisitors({ date?, token?, callerIp? })`
+
+Returns all unique visitor records for a given date, keyed by IP.
+
+```typescript
+const visitors = await telemetry.getVisitors({ date: "2023-10-25", token, callerIp });
+```
+
+---
+
+##### `getVisitorByIp({ ip, date?, token?, callerIp? })`
+
+Returns all visit data for a specific IP address on a given date.
+
+```typescript
+const visitor = await telemetry.getVisitorByIp({ ip: "192.168.1.1", token, callerIp });
+```
+
+```json
+{
+  "totalRequests": 1,
+  "visits": [
+    { "path": "/home", "timestamp": "2023-10-25T14:00:00.000Z", "responseTime": 45, "error": null }
+  ]
+}
+```
+
+---
+
+##### `countUniqueVisitors({ date?, token?, callerIp? })`
+
+Returns the total number of unique IPs for a given date.
+
+```typescript
+const count = await telemetry.countUniqueVisitors({ token, callerIp }); // => 320
+```
+
+---
+
+##### `getPageViews({ date?, token?, callerIp? })`
+
+Returns a record mapping paths to their total view count.
+
+```typescript
+const views = await telemetry.getPageViews({ date: "2023-10-25", token, callerIp });
+// => { "/home": 850, "/about": 320 }
+```
+
+---
+
+##### `getTopPages({ limit, date?, token?, callerIp? })`
+
+Returns the top `limit` most visited pages, sorted by views descending.
+
+```typescript
+const top5 = await telemetry.getTopPages({ limit: 5, token, callerIp });
+// => [{ path: "/home", views: 850 }, ...]
+```
+
+---
+
+##### `getPageByPath({ path, date?, token?, callerIp? })`
+
+Returns detailed stats for a specific path, including average response time and error count.
+
+```typescript
+const page = await telemetry.getPageByPath({ path: "/pricing", token, callerIp });
+```
+
+```json
+{
+  "path": "/pricing",
+  "views": 310,
+  "visitors": ["192.168.1.1", "10.0.0.5"],
+  "avgResponseTime": 65.3,
+  "errorCount": 2
+}
+```
+
+---
+
+##### `getAvgResponseTime({ date?, token?, callerIp? })`
+
+Returns the average response time (ms) across all requests for a given date.
+
+```typescript
+const avg = await telemetry.getAvgResponseTime({ token, callerIp }); // => 42.5
+```
+
+---
+
+##### `getSlowRequests({ threshold, date?, token?, callerIp? })`
+
+Returns all requests that exceeded `threshold` milliseconds, sorted slowest-first. Includes path and timestamp for each entry.
+
+```typescript
+const slow = await telemetry.getSlowRequests({ threshold: 500, token, callerIp });
+```
+
+```json
+[
+  { "ip": "10.0.0.5", "path": "/checkout", "timestamp": "2023-10-25T14:03:00.000Z", "responseTime": 1250 }
+]
+```
+
+---
+
+##### `getErrors({ date?, token?, callerIp? })`
+
+Returns a detailed list of all requests that resulted in an error, sorted newest-first. Each entry contains the structured `error` object with `code` and `message`.
+
+```typescript
+const errors = await telemetry.getErrors({ token, callerIp });
+```
+
+```json
+[
+  {
+    "ip": "10.0.0.5",
+    "path": "/checkout",
+    "timestamp": "2023-10-25T14:03:00.000Z",
+    "responseTime": 1250,
+    "error": { "code": 500, "message": "Payment gateway timeout" }
+  }
+]
+```
+
+---
+
+##### `countErrors({ date?, token?, callerIp? })`
+
+Returns the total number of errored requests for a given date.
+
+```typescript
+const total = await telemetry.countErrors({ token, callerIp }); // => 15
+```
+
+---
+
+##### `getTrafficSources({ source?, date?, token?, callerIp? })`
+
+Groups visit counts by `source/medium` based on recorded UTM parameters. Filter by a specific `source` to narrow results.
+
+```typescript
+const sources = await telemetry.getTrafficSources({ source: "google", token, callerIp });
+// => { "google/cpc": 450, "google/organic": 200 }
+```
+
+---
+
+##### `flush({ token?, callerIp? })`
+
+Clears **all** telemetry data from the store. Use with caution.
+
+```typescript
+await telemetry.flush({ token, callerIp });
+```
+
+---
+
+##### `delete({ ip?, date?, token?, callerIp? })`
+
+Deletes records based on IP, date, or both. Useful for GDPR erasure requests or cleaning up test data.
+
+```typescript
+// Delete all data for a specific date
+await telemetry.delete({ date: "2023-10-25", token, callerIp });
+
+// Delete all data for a specific IP across all dates
+await telemetry.delete({ ip: "192.168.1.1", token, callerIp });
+
+// Delete data for a specific IP on a specific date
+await telemetry.delete({ ip: "192.168.1.1", date: "2023-10-25", token, callerIp });
 ```
 
 ### Security Headers (Shield)
