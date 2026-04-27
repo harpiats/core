@@ -4,8 +4,8 @@ Harpia Core is the foundational module of the Harpia Framework, designed exclusi
 
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-%3E%3D%205.x-blue.svg)](https://www.typescriptlang.org/)
-[![Bun](https://img.shields.io/badge/Bun-%3E%3D%201.x-blue.svg)](https://bun.sh/)
-[![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](https://github.com/@harpia/core/core/blob/main/LICENSE)
+[![Bun](https://img.shields.io/badge/Bun-%3E%3D%201.2-blue.svg)](https://bun.sh/)
+[![Apache License](https://img.shields.io/badge/License-Apache-green.svg)](https://github.com/@harpia/core/core/blob/main/LICENSE)
 [![Coverage](https://img.shields.io/badge/Coverage-100%25-brightgreen.svg)]()
 
 
