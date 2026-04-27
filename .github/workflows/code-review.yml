@@ -20,8 +20,5 @@ jobs:
       - name: Install dependencies
         run: bun install
 
-      - name: Make test script executable
-        run: chmod +x ./run-isolated-tests.sh
-
-      - name: Run isolated tests
-        run: ./run-isolated-tests.sh
+      - name: Run tests
+        run: bun run tests

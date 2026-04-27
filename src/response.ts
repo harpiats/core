@@ -8,6 +8,8 @@ class ResponseWrapper {
   private body: any;
   private cookiesInstance: Cookies;
   private currentModule: string | null = null;
+  private isJson: boolean = false;
+  private app?: Application;
 
   public headers: Headers;
   public cookies = {
@@ -15,19 +17,26 @@ class ResponseWrapper {
     delete: this.deleteCookie.bind(this),
   };
 
-  constructor() {
+  constructor(app?: Application) {
     this.headersInstance = new Headers();
     this.statusCode = 200;
     this.body = null;
     this.headers = this.getHeadersInstance();
-
     this.cookiesInstance = new Cookies();
+    this.app = app;
   }
 
   public parse(): Response {
     this.setCookiesInHeaders();
 
-    return new Response(this.body, {
+    if (this.isJson) {
+      return globalThis.Response.json(this.body, {
+        headers: this.headersInstance,
+        status: this.statusCode,
+      });
+    }
+
+    return new globalThis.Response(this.body, {
       headers: this.headersInstance,
       status: this.statusCode,
     });
@@ -43,9 +52,11 @@ class ResponseWrapper {
     return this;
   }
 
-  public send(data: any): this {
+  public send<T>(data: T): this {
     this.body = data;
-    this.headersInstance.set("Content-Lenght", data.length.toString());
+    if (typeof data === "string" || Array.isArray(data) || data instanceof Uint8Array) {
+      this.headersInstance.set("Content-Length", data.length.toString());
+    }
 
     return this;
   }
@@ -57,9 +68,11 @@ class ResponseWrapper {
     return this;
   }
 
-  public json(data: any): this {
+  public json<T>(data: T): this {
     this.headersInstance.set("Content-Type", "application/json");
-    this.body = JSON.stringify(data);
+    this.body = data;
+    this.isJson = true;
+    
     return this;
   }
 
@@ -76,7 +89,7 @@ class ResponseWrapper {
   }
 
   public async render(view: string, data: Record<string, any> = {}): Promise<this> {
-    const engine = Application.getInstance().engine.get();
+    const engine = this.app?.engine.get();
 
     if (!engine) {
       throw new Error("No template engine configured.");
@@ -107,7 +120,8 @@ class ResponseWrapper {
   }
 
   private deleteCookie(name: string, options?: CookiesOptions): this {
-    this.cookiesInstance.delete(name, options);
+    const deletedCookie = this.cookiesInstance.delete(name, options);
+    this.headersInstance.append("Set-Cookie", deletedCookie);
 
     return this;
   }

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test, spyOn } from "bun:test";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { TemplateEngine } from "../template-engine";
@@ -72,6 +72,15 @@ describe("TemplateEngine", () => {
       const engine = createTestEngine();
       const result = await engine.render("index", { safe: "<div>" });
       expect(result).toBe("<div>");
+    });
+
+    test("should resolve view path with defaultViewName", async () => {
+      await mkdir(join(TEST_DIR, "views/home"), { recursive: true });
+      await writeFile(join(TEST_DIR, "views/home/index.html"), "Home Page");
+
+      const engine = createTestEngine({ viewName: "index" });
+      const result = await engine.render("home");
+      expect(result).toBe("Home Page");
     });
   });
 
@@ -739,6 +748,14 @@ describe("TemplateEngine", () => {
       expect(result1).toContain('<span class="warning">Score is 75</span>');
       expect(result2).not.toContain("warning");
     });
+
+    test("should call raw plugin directly", async () => {
+      await createTestFile("views/raw-plugin.html", "@set result = raw('<b>bold</b>') @endset{{ raw(result) }}");
+
+      const engine = createTestEngine();
+      const result = await engine.render("raw-plugin");
+      expect(result).toBe("<b>bold</b>");
+    });
   });
 
   describe("Variable definitions", () => {
@@ -875,6 +892,29 @@ describe("TemplateEngine", () => {
       const result = await engine.render("index");
       expect(result).toBe("Admin View");
     });
+
+    test("should resolve module view path with defaultViewName", async () => {
+      await mkdir(join(TEST_DIR, "views/admin/dashboard"), { recursive: true });
+      await writeFile(join(TEST_DIR, "views/admin/dashboard/index.html"), "Dashboard");
+
+      const engine = createTestEngine({
+        path: { views: join(TEST_DIR, "views/**") },
+        useModules: true,
+        viewName: "index",
+      }).module("admin");
+
+      const result = await engine.render("dashboard");
+      expect(result).toBe("Dashboard");
+    });
+
+    test("should throw if no module is set in module mode", async () => {
+      const engine = createTestEngine({
+        path: { views: join(TEST_DIR, "views/**") },
+        useModules: true,
+      });
+
+      expect(engine.render("index")).rejects.toThrow("View path must include a module.");
+    });
   });
 
   describe("Error Handling", () => {
@@ -898,6 +938,26 @@ describe("TemplateEngine", () => {
       const engine = createTestEngine();
       const result = await engine.generate("test-temp/views/custom");
       expect(result).toBe("Custom Template");
+    });
+
+    test("should generate template content successfully", async () => {
+      const engine = new TemplateEngine({
+        path: { views: join(TEST_DIR, "views") },
+      });
+      await writeFile(join(TEST_DIR, "views/generate-test.html"), "<h1>{{ title }}</h1>");
+
+      const result = await engine.generate("test-temp/views/generate-test", { title: "Hello World" });
+      expect(result.trim()).toBe("<h1>Hello World</h1>");
+
+      await rm(join(TEST_DIR, "views/generate-test.html"));
+    });
+
+    test("should throw error if file is not found", async () => {
+      const engine = new TemplateEngine({
+        path: { views: join(TEST_DIR, "views") },
+      });
+
+      expect(engine.generate("test-temp/views/non-existent")).rejects.toThrow("Error rendering template.");
     });
   });
 
@@ -948,20 +1008,16 @@ describe("TemplateEngine", () => {
         engine: {
           set: mock(),
         },
-        requestIP: mock(() => "192.168.1.1"),
-      };
-
-      const mockShield = {
         getNonce: mock(() => "test-nonce-123"),
       };
 
       const engine = createTestEngine();
-      engine.configure(mockApp as any, mockShield as any);
+      engine.configure(mockApp as any);
 
       // Testa indiretamente através da renderização
       const result = await engine.render("test-nonce", {});
       expect(result).toBe("test-nonce-123");
-      expect(mockShield.getNonce).toHaveBeenCalledWith("192.168.1.1");
+      expect(mockApp.getNonce).toHaveBeenCalled();
     });
 
     test("should not have generateNonce plugin when shield is not provided", async () => {
@@ -971,6 +1027,7 @@ describe("TemplateEngine", () => {
         engine: {
           set: mock(),
         },
+        getNonce: mock(() => null),
       };
 
       const engine = createTestEngine();
@@ -995,19 +1052,15 @@ describe("TemplateEngine", () => {
         engine: {
           set: mock(),
         },
-        requestIP: mock(() => "192.168.1.1"),
-      };
-
-      const mockShield = {
         getNonce: mock(() => "test-nonce-456"),
       };
 
       const engine = createTestEngine();
-      engine.configure(mockApp as any, mockShield as any);
+      engine.configure(mockApp as any);
 
       const result = await engine.render("multiple-nonce", {});
       expect(result).toContain("test-nonce-456");
-      expect(mockShield.getNonce).toHaveBeenCalledTimes(3);
+      expect(mockApp.getNonce).toHaveBeenCalledTimes(3);
     });
 
     test("should handle empty IP address", async () => {
@@ -1017,19 +1070,15 @@ describe("TemplateEngine", () => {
         engine: {
           set: mock(),
         },
-        requestIP: mock(() => ""),
-      };
-
-      const mockShield = {
         getNonce: mock(() => "fallback-nonce"),
       };
 
       const engine = createTestEngine();
-      engine.configure(mockApp as any, mockShield as any);
+      engine.configure(mockApp as any);
 
       const result = await engine.render("empty-ip", {});
       expect(result).toBe("fallback-nonce");
-      expect(mockShield.getNonce).toHaveBeenCalledWith("");
+      expect(mockApp.getNonce).toHaveBeenCalled();
     });
 
     test("should work with @set directive for nonce", async () => {
@@ -1045,20 +1094,77 @@ describe("TemplateEngine", () => {
         engine: {
           set: mock(),
         },
-        requestIP: mock(() => "192.168.1.1"),
-      };
-
-      const mockShield = {
         getNonce: mock(() => "set-nonce-789"),
       };
 
       const engine = createTestEngine();
-      engine.configure(mockApp as any, mockShield as any);
+      engine.configure(mockApp as any);
 
       const result = await engine.render("set-nonce", {});
       expect(result).toContain('nonce="set-nonce-789"');
       expect(result).toContain('console.log("set-nonce-789")');
-      expect(mockShield.getNonce).toHaveBeenCalledTimes(1); // Só chamado uma vez com @set
+      expect(mockApp.getNonce).toHaveBeenCalledTimes(1); // Só chamado uma vez com @set
+    });
+  });
+
+  describe("Warnings", () => {
+    test("should log a warning if @layout is used but layoutsPath is not defined", async () => {
+      const consoleSpy = spyOn(console, "log");
+      const engine = new TemplateEngine({
+        path: { views: join(TEST_DIR, "views") },
+      });
+      await writeFile(join(TEST_DIR, "views/layout-warn.html"), "@layout('main')");
+
+      const result = await engine.render("layout-warn", {});
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("layout path is not defined"));
+      expect(result.trim()).toBe("");
+
+      consoleSpy.mockRestore();
+      await rm(join(TEST_DIR, "views/layout-warn.html"));
+    });
+
+    test("should log a warning if @block is used but layoutsPath is not defined", async () => {
+      const consoleSpy = spyOn(console, "log");
+      const engine = new TemplateEngine({
+        path: { views: join(TEST_DIR, "views") },
+      });
+      await writeFile(join(TEST_DIR, "views/block-warn.html"), "@block('content') hello @endblock");
+
+      const result = await engine.render("block-warn", {});
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("layout path is not defined"));
+      expect(result.trim()).toBe("hello");
+
+      consoleSpy.mockRestore();
+      await rm(join(TEST_DIR, "views/block-warn.html"));
+    });
+  });
+
+  describe("Minify Extension", () => {
+    test("should correctly chain minify on render Promise", async () => {
+      const engine = new TemplateEngine({
+        path: { views: join(TEST_DIR, "views") },
+      });
+      await writeFile(join(TEST_DIR, "views/minify-test.html"), "  <div>   Test   </div>  ");
+
+      const result = await engine.render("minify-test").minify("generic");
+      expect(result).toBe("<div> Test </div>");
+
+      await rm(join(TEST_DIR, "views/minify-test.html"));
+    });
+
+    test("should correctly chain minify html on render Promise", async () => {
+      const engine = new TemplateEngine({
+        path: { views: join(TEST_DIR, "views") },
+      });
+      await writeFile(
+        join(TEST_DIR, "views/minify-html-test.html"),
+        "<div><!--comment-->Test</div>"
+      );
+
+      const result = await engine.render("minify-html-test").minify("html");
+      expect(result).toBe("<div>Test</div>");
+
+      await rm(join(TEST_DIR, "views/minify-html-test.html"));
     });
   });
 });

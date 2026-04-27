@@ -17,7 +17,7 @@ export class TestClient {
     this.app = app;
     this.headersInstance = new Headers();
 
-    this.port = this.app.server().port;
+    this.port = this.app.server().port || 3000;
     this.baseUrl = `http://${this.app.server().hostname}:${this.port}`;
     this.method = "";
     this.url = "";
@@ -132,7 +132,7 @@ export class TestClient {
         const blob = new Blob([file], { type: file.type });
         formData.append(key, blob, path.basename(value));
       } else if (value instanceof Blob) {
-        formData.append(key, value, value.name);
+        formData.append(key, value, (value as any).name || "blob");
       } else {
         throw new Error(`Invalid file type for key "${key}". Expected a file path (string) or Blob.`);
       }
@@ -154,15 +154,13 @@ export class TestClient {
       for (const value of values) {
         if (typeof value === "string") {
           const file = Bun.file(value);
-          const fileExists = file.exists().then((exists) => exists);
-
-          if (!fileExists) {
+          if (!file.size) {
             throw new Error(`File not found at path: ${value}`);
           }
 
           formData.append(key, file, path.basename(value));
         } else if (value instanceof Blob) {
-          formData.append(key, value, value.name);
+          formData.append(key, value, (value as any).name || "blob");
         } else {
           throw new Error(`Invalid file type for key "${key}". Expected a file path (string) or Blob.`);
         }

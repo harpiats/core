@@ -3,7 +3,8 @@ import { rm } from "node:fs/promises";
 import { resolve } from "node:path";
 import { Upload } from "../upload";
 
-import type { Request, Response } from "harpiats";
+import type { Request } from "../request";
+import type { Response } from "../response";
 
 // Mock de Request e Response
 const mockRequest = (files?: File[]): Request =>
@@ -58,6 +59,10 @@ describe("Upload", () => {
 
       expect(res.status).not.toHaveBeenCalledWith(400);
       expect(mockNext).toHaveBeenCalled();
+      
+      // Cover the closure that wraps formData
+      const formData = await req.formData();
+      expect(formData.get("file")).toBeTruthy();
     });
 
     test("should reject file exceeding size limit", async () => {
@@ -75,6 +80,9 @@ describe("Upload", () => {
       expect(res.json).toHaveBeenCalledWith({
         message: 'The file "large.jpg" exceeds the maximum allowed size of 5 MB.',
       });
+
+      const processedFormData = await req.formData();
+      expect(processedFormData.get("file")).toBeTruthy();
     });
 
     test("should reject invalid file extension", async () => {
@@ -138,6 +146,10 @@ describe("Upload", () => {
       expect(res.status).not.toHaveBeenCalled();
       expect(res.json).not.toHaveBeenCalled();
       expect(mockNext).toHaveBeenCalled();
+
+      // Cover the closure that wraps formData
+      const formData = await req.formData();
+      expect(formData.getAll("file").length).toBe(2);
     });
 
     test("should rollback on partial failure", async () => {

@@ -80,7 +80,13 @@ describe("Router", () => {
   });
 
   it("should register a WS route", () => {
-    const handlers = { open: () => {}, message: () => {}, close: () => {} };
+    const handlers = {
+      open: () => {},
+      message: () => {},
+      close: () => {},
+      drain: () => {},
+      error: () => {},
+    };
     router.ws("/ws", handlers);
 
     const routes = router.wsList();
@@ -105,9 +111,10 @@ describe("Router", () => {
     router.get("/users/:userId/posts/:postId", handler);
     const route = router.isRouteMatching("/users/123/posts/456", "GET");
     expect(route).not.toBeNull();
-    expect(route?.method).toBe("GET");
-    expect(route?.path).toBe("/users/:userId/posts/:postId");
-    expect(route?.controller).toBe(handler);
+    expect(route?.route.method).toBe("GET");
+    expect(route?.route.path).toBe("/users/:userId/posts/:postId");
+    expect(route?.route.controller).toBe(handler);
+    expect(route?.params).toEqual({ userId: "123", postId: "456" });
   });
 
   it("should not match a route with different method", () => {
@@ -186,5 +193,28 @@ describe("Router", () => {
 
     const routerWithoutSlash = new Router("api");
     expect(routerWithoutSlash.getPrefix()).toBe("/api");
+  });
+
+  it("should register ws routes without prefix", () => {
+    const subRouter = new Router();
+    subRouter.ws("/chat", { open: () => {} } as any);
+
+    router.register({ routes: [], wsRoutes: subRouter.wsList() });
+
+    const wsRoutes = router.wsList();
+    expect(wsRoutes).toHaveLength(1);
+    expect(wsRoutes[0].path).toBe("/chat");
+  });
+
+  it("should register ws routes with prefix", () => {
+    const subRouter = new Router("/api");
+    const prefix = subRouter.getPrefix();
+    subRouter.ws("/chat", { open: () => {} } as any);
+
+    router.register({ prefix, routes: [], wsRoutes: subRouter.wsList() });
+
+    const wsRoutes = router.wsList();
+    expect(wsRoutes).toHaveLength(1);
+    expect(wsRoutes[0].path).toBe("/api/chat");
   });
 });

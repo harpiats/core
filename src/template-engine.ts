@@ -3,7 +3,6 @@ import path, { join } from "node:path";
 import { colorize } from "./utils/colorize";
 
 import type { Application } from "./server";
-import type { Shield } from "./shield";
 import type { Engine, RenderPromise } from "./types/engine";
 import type { Blocks, Data, Options, PluginFunction } from "./types/template-engine";
 
@@ -30,15 +29,12 @@ export class TemplateEngine implements Engine {
     };
   }
 
-  public configure(app: Application, shield?: Shield): void {
+  public configure(app: Application): void {
     app.engine.set(this);
 
-    if (shield) {
-      this.plugins["generateNonce"] = () => {
-        const ip = app.requestIP() || "";
-        return shield.getNonce(ip);
-      };
-    }
+    this.plugins["generateNonce"] = () => {
+      return app.getNonce() || "";
+    };
   }
 
   public module(moduleName: string): this {
@@ -66,8 +62,9 @@ export class TemplateEngine implements Engine {
     const promise = execute() as RenderPromise;
 
     // Attach a minification method chained to the render execution
-    promise.minify = (type: "html" | "generic" = "html") => {
-      return promise.then(() => this.minify(type));
+    promise.minify = async (type: "html" | "generic" = "html") => {
+      await promise;
+      return this.minify(type);
     };
 
     return promise;
@@ -552,8 +549,8 @@ export class TemplateEngine implements Engine {
         if (pluginResult !== undefined && pluginResult !== null) {
           return pluginResult;
         }
-      } catch (error: any) {
-        console.warn(`Plugin ${pluginName} execution warning:`, error.message);
+      } catch (error: unknown) {
+        console.warn(`Plugin ${pluginName} execution warning:`, error instanceof Error ? error.message : String(error));
         return null;
       }
     }
@@ -562,8 +559,8 @@ export class TemplateEngine implements Engine {
     try {
       const func = new Function(...Object.keys(data), `return ${expression};`);
       return func(...Object.values(data));
-    } catch (error: any) {
-      console.warn(`Expression evaluation warning: ${error.message}`);
+    } catch (error: unknown) {
+      console.warn(`Expression evaluation warning: ${error instanceof Error ? error.message : String(error)}`);
       return null;
     }
   }

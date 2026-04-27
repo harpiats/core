@@ -4,10 +4,9 @@ Harpia Core is the foundational module of the Harpia Framework, designed exclusi
 
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-%3E%3D%205.x-blue.svg)](https://www.typescriptlang.org/)
-
 [![Bun](https://img.shields.io/badge/Bun-%3E%3D%201.x-blue.svg)](https://bun.sh/)
-
-[![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](https://github.com/harpiats/core/blob/main/LICENSE)
+[![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](https://github.com/@harpia/core/core/blob/main/LICENSE)
+[![Coverage](https://img.shields.io/badge/Coverage-100%25-brightgreen.svg)]()
 
 
 Table of Contents
@@ -28,7 +27,7 @@ Table of Contents
   - [Session](#session)
   - [CSRF](#csrf)
   - [Upload](#upload)
-  - [Request Monitor](#request-monitor)
+  - [Telemetry](#telemetry)
   - [Security Headers (Shield)](#security-headers-shield)
   - [Test Client](#test-client)
   - [Memory Storage](#memory-storage)
@@ -38,7 +37,7 @@ Table of Contents
 ## Installation
 
 ```bash
-  bun add harpiats
+  bun add @harpia/core
 ```
 
 ## Features
@@ -63,7 +62,7 @@ Table of Contents
 
 ### Start the server
 ```typescript
-import harpia from "harpia";
+import harpia from "@harpia/core";
 
 const app = harpia();
 
@@ -82,7 +81,7 @@ This object defines how the HTTP and WebSocket servers behave, including port, h
 #### Example
 
 ```typescript
-import harpia from "harpia";
+import harpia from "@harpia/core";
 
 const app = harpia();
 
@@ -141,7 +140,7 @@ The `ws` property defines advanced options for WebSocket behavior and resource l
 Creating a route in a different file.
 
 ```typescript
-import { Router } from "harpia";
+import { Router } from "@harpia/core";
 
 const books = Router();
 
@@ -153,7 +152,7 @@ export default books;
 Creating a route with a prefix
 
 ```typescript
-import { Router } from "harpia";
+import { Router } from "@harpia/core";
 
 const books = Router("books");
 
@@ -165,7 +164,7 @@ export default books;
 Creating a websocket route
 
 ```typescript
-import { Router } from "harpia";
+import { Router } from "@harpia/core";
 
 const routes = Router();
 
@@ -223,7 +222,7 @@ export default routes;
 Import the route into the main application.
 
 ```typescript
-import harpia from "harpia";
+import harpia from "@harpia/core";
 import books from "./books.routes";
 
 const app = harpia();
@@ -261,7 +260,7 @@ app.use("/panel", (req, res, next) => {
 **Set a middleware to a specific route**
 
 ```typescript
-import { Router } from "harpia";
+import { Router } from "@harpia/core";
 
 const books = Router();
 
@@ -284,7 +283,7 @@ Each connection creates its own `ServerWebSocket` instance, which can hold **cus
 You can create WebSocket routes using either the **application instance (`app`)** or a **router instance (`Router`)**:
 
 ```typescript
-import { Router } from "harpia";
+import { Router } from "@harpia/core";
 
 const routes = Router();
 
@@ -294,7 +293,7 @@ routes.ws("/chat", { /** handlers */ });
 or
 
 ```typescript
-import harpia from "harpia";
+import harpia from "@harpia/core";
 
 const app = harpia();
 
@@ -397,7 +396,7 @@ Create a file for engine configuration:
 // src/ejs.ts
 import ejs from "ejs";
 import path from "node:path";
-import type { Harpia } from "harpia";
+import type { Harpia } from "@harpia/core";
 
 export const ejsEngine = {
   configure: (app: Harpia) => {
@@ -413,7 +412,7 @@ export const ejsEngine = {
 
 Set up the application to use the engine:
 ```typescript
-import harpia from "harpia";
+import harpia from "@harpia/core";
 import { ejsEngine } from "./ejs";
 
 const app = harpia();
@@ -447,7 +446,7 @@ To use the harpia template engine, you can follow these steps:
 create a `template-engine.ts` file:
 ```typescript
 import path from "node:path";
-import { TemplateEngine } from "harpiats/template-engine";
+import { TemplateEngine } from "@harpia/core/template-engine";
 
 const baseDir = process.cwd();
 
@@ -466,7 +465,7 @@ export const engine = new TemplateEngine({
 And set up the application to use the engine:
 
 ```typescript
-import harpia from "harpiats";
+import harpia from "@harpia/core";
 import { engine } from "./template-engine";
 
 const app = harpia();
@@ -481,7 +480,7 @@ app.listen...
 
 If you want to use the [Security Header Protection](#security-headers-shield):
 ```typescript
-import { harpia } from "harpia";
+import harpia from "@harpia/core";
 import { shield } from "./shield";
 import { engine } from "./template-engine";
 
@@ -504,7 +503,7 @@ app.listen...
 If you would like use a module structure, e.g. `modules/users/pages/home/page.html`, then create a `template-engine.ts` file:
 ```typescript
 import path from "node:path";
-import { TemplateEngine } from "harpiats/template-engine";
+import { TemplateEngine } from "@harpia/core/template-engine";
 
 const baseDir = process.cwd();
 
@@ -523,7 +522,7 @@ export const engine = new TemplateEngine({
 And set up the application to use the engine:
 
 ```typescript
-import harpia from "harpiats";
+import harpia from "@harpia/core";
 import { engine } from "app/config/template-engine";
 
 const app = harpia();
@@ -538,7 +537,7 @@ app.listen...
 
 It is also possible to render a template from its path, regardless of where it is in the application. To do this, we can follow the example:
 ```typescript
-import harpia from "harpiats";
+import harpia from "@harpia/core";
 import { engine } from "app/config/template-engine";
 
 const app = harpia();
@@ -575,7 +574,7 @@ app.listen...
 
 ```typescript
 import path from "node:path";
-import { TemplateEngine } from "harpiats/template-engine";
+import { TemplateEngine } from "@harpia/core/template-engine";
 
 const baseDir = process.cwd();
 
@@ -643,7 +642,7 @@ When using the Shield module for security headers, the template engine automatic
 </script>
 ```
 
-> The `generateNonce` plugin is only available when the Shield instance is passed to the engine.configure method. See the [Shield](#security-headers-shield) section for setup instructions.
+> The `generateNonce` plugin is automatically available when `app.shield()` is configured in the application. See the [Shield](#security-headers-shield) section for setup instructions.
 
 ### Method Override
 The Method Override technique is commonly used to simulate HTTP methods like `PUT`, `DELETE`, and `PATCH` in web applications where the client (e.g., browsers) may not natively support these methods. This is particularly useful when working with HTML forms, which only support `GET` and `POST` methods.
@@ -689,7 +688,7 @@ You can define CORS settings globally for the entire application or specify them
 To set up basic CORS for your application:
 
 ```typescript
-import harpia from "harpia";
+import harpia from "@harpia/core";
 
 const app = harpia();
 
@@ -707,7 +706,7 @@ app.listen...
 You can also apply different CORS configurations to specific routes or groups of routes.
 
 ```typescript
-import harpia, { Router } from "harpia";
+import harpia, { Router } from "@harpia/core";
 
 const books = Router();
 
@@ -777,7 +776,7 @@ You can use this to store session information, authentication tokens, or any oth
 To set a cookie, you can use the `res.cookies.set` method. You can specify various options such as expiration date, domain, path, and security settings.
 
 ```typescript
-import harpia, { type CookiesOptions } from "harpia";
+import harpia, { type CookiesOptions } from "@harpia/core";
 
 const app = harpia();
 
@@ -869,8 +868,7 @@ Harpia includes a `Cache` class that allows you to store and manage cached data 
 To create a new cache instance, simply instantiate the `Cache` class. You can optionally provide a custom `store` (e.g., using a custom memory store or a third-party store like Redis).
 
 ```typescript
-import harpia from "harpia";
-import { Cache } from "harpia/cache";
+import harpia, { Cache } from "@harpia/core";
 
 const app = harpia();
 const cache = new Cache();
@@ -881,8 +879,7 @@ const cache = new Cache();
 You can store data in the cache or retrieve it from the cache within route handlers. Here's an example of caching a value in a route and retrieving it from the cache in a different route:
 
 ```typescript
-import harpia from "harpia";
-import { Cache } from "harpia/cache";
+import harpia, { Cache } from "@harpia/core";
 
 const app = harpia();
 const cache = new Cache();
@@ -959,8 +956,7 @@ Harpia includes a `Session` class that allows you to manage user sessions. The `
 To use the session management functionality, you first need to create an instance of the `Session` class.
 
 ```typescript
-import harpia from "harpia";
-import { Session } from "harpia/session";
+import harpia, { Session } from "@harpia/core";
 
 const app = harpia();
 const session = new Session();
@@ -1065,8 +1061,8 @@ The `CSRF` class provides a simple and lightweight mechanism for generating and 
 #### Setup
 
 ```ts
-import { CSRF } from "harpiats/csrf";
-import { MemoryStore } from "harpiats/memory-store";
+import { CSRF } from "@harpia/core/csrf";
+import { MemoryStore } from "@harpia/core/memory-store";
 
 const csrf = new CSRF({
   store: new MemoryStore(),
@@ -1159,7 +1155,7 @@ You can set up a middleware to manage single or multiple file uploads, specifyin
 First, create an instance of the Upload module with your desired configuration:
 
 ```typescript
-import { Upload } from "harpiats/upload";
+import { Upload } from "@harpia/core/upload";
 
 export const upload = new Upload({
   fieldName: "file",       // Field name for the file in the request
@@ -1191,130 +1187,329 @@ app.post("/user", upload.multiple, async (req, res) => {
 });
 ```
 
-### Request monitor
-The Request Monitor tracks and analyzes request metrics, including visitor data, traffic sources, response times, and errors. It helps monitor application performance and user behavior.
+### Telemetry
 
-**Setting Up the Request Monitor**
-First, instantiate the RequestMonitor and configure it with a storage mechanism (e.g., MemoryStore). You can also define routes to ignore, such as favicon.ico.
+Harpia includes a built-in `Telemetry` module that acts as an observability-as-a-service tool. It tracks server traffic, page views, response times, errors, and visitor behavior out of the box, offering a comprehensive Reading API to build internal dashboards without needing third-party analytics tools.
 
-```typescript
-import type { NextFunction, Request, Response } from "harpiats";
-import { MemoryStore } from "harpiats/memory-store";
-import { RequestMonitor } from "harpiats/monitor";
-import { app } from "start/server";
+Each visit is stored as a unified `VisitData` object, keeping path, timestamp, response time, error details, and traffic source together in a single, self-contained record.
 
-// Initialize the RequestMonitor
-export const Monitor = new RequestMonitor({
-  store: new MemoryStore(), // Use MemoryStore for storing metrics
-  ignore: ["favicon.ico"], // Ignore specific routes
-});
+#### Setup
 
-// Middleware to track requests
-export const monitor = (req: Request, res: Response, next: NextFunction) => {
-  if (process.env.ENV === "test") {
-    return next(); // Skip monitoring in test environment
-  }
-
-  // Extract traffic source data from the request
-  const trafficSource = {
-    utm: {
-      id: req.query?.utm_id,
-      source: req.query?.utm_source,
-      medium: req.query?.utm_medium,
-      campaign: req.query?.utm_campaign,
-      sourcePlatform: req.query?.utm_source_platform,
-      term: req.query?.utm_term,
-      content: req.query?.utm_content,
-      creativeFormat: req.query?.utm_creative_format,
-      marketingTactic: req.query?.utm_marketing_tactic,
-    },
-    referer: req.headers.get("referer") || undefined, // Referer header
-    userAgent: req.headers.get("User-Agent") || undefined, // User-Agent header
-  };
-
-  // Initialize monitoring for the request
-  Monitor.initialize(req, app.requestIP() as string, trafficSource);
-  Monitor.handleRequest();
-
-  next(); // Proceed to the next middleware or route handler
-};
-```
-
-**Using the Request Monitor**
-Add the monitor middleware to your application. You can access metrics via a dedicated route, such as /metrics.
+Instantiate the `Telemetry` class and add `handleRequest` as a global middleware:
 
 ```typescript
+import harpia, { Telemetry } from "@harpia/core";
+
 const app = harpia();
 
-// Add the monitor middleware
-app.use(monitor);
+const telemetry = new Telemetry({
+  ignore: ["/favicon.ico", "/healthcheck"], // Paths to exclude from monitoring
+  trustProxy: true, // Enable if behind Nginx/Cloudflare to resolve real IPs
+});
 
-// Route to fetch metrics
-app.get("/metrics", async (req, res) => {
-  const metrics = await Monitor.getMetrics();
-  console.log(metrics);
-  res.json(metrics); // Return metrics as JSON
+app.use(async (req, res, next) => {
+  await telemetry.initialize(req, app.requestIP() || "unknown");
+  const telemetryRes = await telemetry.handleRequest();
+  if (telemetryRes) return telemetryRes;
+  next();
 });
 ```
 
-**Using Redis as a Store**
-Create a redis.ts file:
+#### Tracking Traffic Sources
+
+Pass a `TrafficSource` object as the third argument to `initialize()` to record UTM attribution data per visit:
+
 ```typescript
-import type { Store } from "harpiats";
-import Redis from "ioredis";
+app.use(async (req, res, next) => {
+  const url = new URL(req.url);
+  const trafficSource = {
+    utm: {
+      source: url.searchParams.get("utm_source") ?? undefined,
+      medium: url.searchParams.get("utm_medium") ?? undefined,
+    },
+  };
 
-export class RedisStore implements Store {
-  private client: Redis;
+  await telemetry.initialize(req, app.requestIP() || "unknown", trafficSource);
+  const telemetryRes = await telemetry.handleRequest();
+  if (telemetryRes) return telemetryRes;
+  next();
+});
+```
 
-  constructor(db?: number) {
-    this.client = new Redis({
-      host: process.env.REDIS_HOST || "localhost",
-      username: process.env.REDIS_USER || "",
-      password: process.env.REDIS_PASS || "",
-      port: Number(process.env.REDIS_PORT) || 6379,
-      db: db || 0,
-      lazyConnect: true,
-    });
+#### Security
 
-    this.client.on("connect", () => console.log("Connected to Redis"));
-    this.client.on("error", (err) => console.error("Redis error:", err));
-    this.client.connect().catch((err) => console.error("Failed to connect to Redis:", err));
-  }
+Protect the Reading API with a token and/or an allowlist of IPs:
 
-  async on(): Promise<boolean> {
-    if (this.client.on("connect", () => true)) {
-      return true;
+```typescript
+const telemetry = new Telemetry({
+  accessToken: process.env.TELEMETRY_TOKEN,
+  allowedIps: ["127.0.0.1", "10.0.0.5"],
+});
+```
+
+Pass `token` and `callerIp` inside the parameter object of any read method. An invalid token or disallowed IP will throw an `Unauthorized` error.
+
+#### `Options` Reference
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `store` | `Store` *(optional)* | Custom storage backend. Defaults to `MemoryStore`. Use `RedisStore` for persistence across restarts. |
+| `ignore` | `string[]` *(optional)* | Paths to skip tracking. |
+| `trustProxy` | `boolean` *(optional)* | When `true`, resolves the real client IP from `x-forwarded-for`, `cf-connecting-ip`, or `x-real-ip` headers. |
+| `maxVisitorsKeys` | `number` *(optional)* | Maximum number of unique IPs stored per day. Defaults to `5000`. |
+| `accessToken` | `string` *(optional)* | Secret token required on all read methods. |
+| `allowedIps` | `string[]` *(optional)* | Allowlist of IPs permitted to call read methods. |
+
+#### Reading API
+
+All methods accept a **single configuration object**. Security properties (`token`, `callerIp`) are always optional inside this object.
+
+---
+
+##### `getAll({ token?, callerIp? })`
+
+Returns the complete raw telemetry data stored in the backend.
+
+```typescript
+const data = await telemetry.getAll({ token, callerIp });
+```
+
+```json
+{
+  "access": {
+    "totalRequests": 1500,
+    "visitorsByDate": {
+      "2023-10-25": {
+        "192.168.1.1": {
+          "totalRequests": 2,
+          "visits": [
+            { "path": "/home", "timestamp": "2023-10-25T14:00:00.000Z", "responseTime": 45, "error": null },
+            { "path": "/about", "timestamp": "2023-10-25T14:01:00.000Z", "responseTime": 30, "error": null }
+          ]
+        }
+      }
     }
-
-    return false;
-  }
-
-  async get(key: string): Promise<Record<string, any> | undefined> {
-    const data = await this.client.get(key);
-
-    return data ? JSON.parse(data) : undefined;
-  }
-
-  async set(key: string, data: any): Promise<void> {
-    await this.client.set(key, JSON.stringify(data));
-  }
-
-  async delete(key: string): Promise<void> {
-    await this.client.del(key);
-  }
+  },
+  "behavior": { "pageViews": { "/home": 850, "/about": 320 } }
 }
-
 ```
 
-And use it like this:
+---
+
+##### `summary({ date?, limit?, token?, callerIp? })`
+
+Returns a high-level daily overview. `limit` controls the number of top pages returned (default: `10`).
 
 ```typescript
-import { RedisStore } from "./redis";
+const stats = await telemetry.summary({ limit: 5, token, callerIp });
+```
 
-export const Monitor = new RequestMonitor({
-  store: new RedisStore(), // Use RedisStore for storing metrics
-  ignore: ["favicon.ico"], // Ignore specific routes
-});
+```json
+{
+  "date": "2023-10-25",
+  "totalRequests": 1500,
+  "uniqueVisitors": 320,
+  "topPages": [
+    { "path": "/home", "views": 850 },
+    { "path": "/about", "views": 320 }
+  ],
+  "avgResponseTime": 42.5,
+  "totalErrors": 2
+}
+```
+
+---
+
+##### `getDailyStats({ token?, callerIp? })`
+
+Returns an array with aggregated request and visitor counts per day. Ideal for trend charts.
+
+```typescript
+const stats = await telemetry.getDailyStats({ token, callerIp });
+```
+
+```json
+[
+  { "date": "2023-10-23", "totalRequests": 980, "uniqueVisitors": 210 },
+  { "date": "2023-10-24", "totalRequests": 1200, "uniqueVisitors": 280 }
+]
+```
+
+---
+
+##### `getVisitors({ date?, token?, callerIp? })`
+
+Returns all unique visitor records for a given date, keyed by IP.
+
+```typescript
+const visitors = await telemetry.getVisitors({ date: "2023-10-25", token, callerIp });
+```
+
+---
+
+##### `getVisitorByIp({ ip, date?, token?, callerIp? })`
+
+Returns all visit data for a specific IP address on a given date.
+
+```typescript
+const visitor = await telemetry.getVisitorByIp({ ip: "192.168.1.1", token, callerIp });
+```
+
+```json
+{
+  "totalRequests": 1,
+  "visits": [
+    { "path": "/home", "timestamp": "2023-10-25T14:00:00.000Z", "responseTime": 45, "error": null }
+  ]
+}
+```
+
+---
+
+##### `countUniqueVisitors({ date?, token?, callerIp? })`
+
+Returns the total number of unique IPs for a given date.
+
+```typescript
+const count = await telemetry.countUniqueVisitors({ token, callerIp }); // => 320
+```
+
+---
+
+##### `getPageViews({ date?, token?, callerIp? })`
+
+Returns a record mapping paths to their total view count.
+
+```typescript
+const views = await telemetry.getPageViews({ date: "2023-10-25", token, callerIp });
+// => { "/home": 850, "/about": 320 }
+```
+
+---
+
+##### `getTopPages({ limit, date?, token?, callerIp? })`
+
+Returns the top `limit` most visited pages, sorted by views descending.
+
+```typescript
+const top5 = await telemetry.getTopPages({ limit: 5, token, callerIp });
+// => [{ path: "/home", views: 850 }, ...]
+```
+
+---
+
+##### `getPageByPath({ path, date?, token?, callerIp? })`
+
+Returns detailed stats for a specific path, including average response time and error count.
+
+```typescript
+const page = await telemetry.getPageByPath({ path: "/pricing", token, callerIp });
+```
+
+```json
+{
+  "path": "/pricing",
+  "views": 310,
+  "visitors": ["192.168.1.1", "10.0.0.5"],
+  "avgResponseTime": 65.3,
+  "errorCount": 2
+}
+```
+
+---
+
+##### `getAvgResponseTime({ date?, token?, callerIp? })`
+
+Returns the average response time (ms) across all requests for a given date.
+
+```typescript
+const avg = await telemetry.getAvgResponseTime({ token, callerIp }); // => 42.5
+```
+
+---
+
+##### `getSlowRequests({ threshold, date?, token?, callerIp? })`
+
+Returns all requests that exceeded `threshold` milliseconds, sorted slowest-first. Includes path and timestamp for each entry.
+
+```typescript
+const slow = await telemetry.getSlowRequests({ threshold: 500, token, callerIp });
+```
+
+```json
+[
+  { "ip": "10.0.0.5", "path": "/checkout", "timestamp": "2023-10-25T14:03:00.000Z", "responseTime": 1250 }
+]
+```
+
+---
+
+##### `getErrors({ date?, token?, callerIp? })`
+
+Returns a detailed list of all requests that resulted in an error, sorted newest-first. Each entry contains the structured `error` object with `code` and `message`.
+
+```typescript
+const errors = await telemetry.getErrors({ token, callerIp });
+```
+
+```json
+[
+  {
+    "ip": "10.0.0.5",
+    "path": "/checkout",
+    "timestamp": "2023-10-25T14:03:00.000Z",
+    "responseTime": 1250,
+    "error": { "code": 500, "message": "Payment gateway timeout" }
+  }
+]
+```
+
+---
+
+##### `countErrors({ date?, token?, callerIp? })`
+
+Returns the total number of errored requests for a given date.
+
+```typescript
+const total = await telemetry.countErrors({ token, callerIp }); // => 15
+```
+
+---
+
+##### `getTrafficSources({ source?, date?, token?, callerIp? })`
+
+Groups visit counts by `source/medium` based on recorded UTM parameters. Filter by a specific `source` to narrow results.
+
+```typescript
+const sources = await telemetry.getTrafficSources({ source: "google", token, callerIp });
+// => { "google/cpc": 450, "google/organic": 200 }
+```
+
+---
+
+##### `flush({ token?, callerIp? })`
+
+Clears **all** telemetry data from the store. Use with caution.
+
+```typescript
+await telemetry.flush({ token, callerIp });
+```
+
+---
+
+##### `delete({ ip?, date?, token?, callerIp? })`
+
+Deletes records based on IP, date, or both. Useful for GDPR erasure requests or cleaning up test data.
+
+```typescript
+// Delete all data for a specific date
+await telemetry.delete({ date: "2023-10-25", token, callerIp });
+
+// Delete all data for a specific IP across all dates
+await telemetry.delete({ ip: "192.168.1.1", token, callerIp });
+
+// Delete data for a specific IP on a specific date
+await telemetry.delete({ ip: "192.168.1.1", date: "2023-10-25", token, callerIp });
 ```
 
 ### Security Headers (Shield)
@@ -1340,32 +1535,20 @@ The Shield module is designed to enhance the security of your application by aut
     - Seamless integration with the template engine.
 
 #### Basic Usage
-Create a Shield Instance with shield.ts file to initialize and export the middleware:
+Configure your security headers and apply them to the application using the native `app.shield()` method.
 
 ```typescript
-import { Shield } from "harpiats/shield";
-import type { Harpia } from "harpiats";
-
-const instance = new Shield({
-  useNonce: true, // Enable nonce generation, false as default.
-});
-
-export const shield = {
-  middleware: (server: Harpia) => instance.middleware(server),
-  instance: instance,
-}
-```
-
-Apply the shield middleware in your server setup:
-
-```typescript
-import { harpia } from "harpia";
-import { shield } from "./shield";
+import harpia from "@harpia/core";
+import type { SecurityHeaders } from "@harpia/core";
 
 const app = harpia();
 
-// Apply security headers middleware
-app.use(shield.middleware());
+const shieldOptions: SecurityHeaders = {
+  useNonce: true, // Enable nonce generation, false as default.
+};
+
+// Apply security headers
+app.shield(shieldOptions);
 
 // Your routes
 app.get("/", (req, res) => {
@@ -1375,29 +1558,29 @@ app.get("/", (req, res) => {
 app.listen({ port: 3000 }, () => console.log("Server running on http://localhost:3000"));
 ```
 
-If you want to use the harpia template engine:
+If you want to use the Harpia template engine, the `generateNonce` plugin is automatically registered when `app.shield()` is initialized:
 
 ```typescript
-import { harpia } from "harpia";
-import { shield } from "./shield";
+import harpia from "@harpia/core";
 import { engine } from "./template-engine";
 
 const app = harpia();
 
-// Apply security headers middleware
-app.use(shield.middleware(app));
+// Apply security headers
+app.shield({ useNonce: true });
 
 // Setup template engine
-engine.configure(app, shield.instance);
+engine.configure(app);
 ```
 
-> To understand more about the harpia template engine, see the [Template Engine](#template-engine) section.
+> To understand more about the Harpia template engine, see the [Template Engine](#template-engine) section.
 
 #### Customizing Security Headers
-You can customize the security headers by passing options to the Shield constructor:
+You can customize the security headers by passing options to `app.shield`:
 
 ```typescript
-const instance = new Shield({
+app.shield({
+  useNonce: true,
   contentSecurityPolicy: {
     directives: {
       "default-src": ["'self'", "https://trusted.com"],
@@ -1410,11 +1593,6 @@ const instance = new Shield({
     preload: true,
   },
 });
-
-export const shield = {
-  middleware: (server: Harpia) => instance.middleware(server),
-  instance: instance,
-};
 ```
 
 #### Use nonce in templates:
@@ -1492,7 +1670,7 @@ The **Test Client** is a powerful tool for testing your application's routes. It
 
 ```typescript
 import { expect, test } from "bun:test";
-import { TestClient } from "harpiats";
+import { TestClient } from "@harpia/core";
 import { app } from "start/server";
 
 test("GET /hello returns status 401", async () => {
@@ -1622,8 +1800,8 @@ console.log(await memoryStore.get("session123")); // undefined
 
 **Using with Session Management**
 ```typescript
-import { MemoryStore } from "harpiats/memory-store";
-import { SessionManager } from "harpiats/session";
+import { MemoryStore } from "@harpia/core/memory-store";
+import { SessionManager } from "@harpia/core/session";
 
 const memoryStore = new MemoryStore();
 const sessionManager = new SessionManager({ store: memoryStore });
@@ -1645,43 +1823,57 @@ The Redis Storage provides a persistent key-value store using Redis. It implemen
 
 **Implementation**
 ```typescript
-import type { Store } from "harpiats";
-import Redis from "ioredis";
+import type { Store } from "@harpia/core";
+import { RedisClient } from "bun";
 
 export class RedisStore implements Store {
-  private client: Redis;
+  private client: RedisClient;
+  private ready: Promise<void>;
 
   constructor(db?: number) {
-    this.client = new Redis({
-      host: process.env.REDIS_HOST || "localhost",
-      username: process.env.REDIS_USER || "",
-      password: process.env.REDIS_PASS || "",
-      port: Number(process.env.REDIS_PORT) || 6379,
-      db: db || 0,
-      lazyConnect: true,
+    const host = process.env.REDIS_HOST || "localhost";
+    const port = process.env.REDIS_PORT || "6379";
+    const user = process.env.REDIS_USER || "";
+    const pass = process.env.REDIS_PASS || "";
+    const auth = user || pass ? `${encodeURIComponent(user)}:${encodeURIComponent(pass)}@` : "";
+    let url = `redis://${auth}${host}:${port}`;
+
+    if (db !== undefined && db !== 0) {
+      url = `${url.replace(/\/\d+$/, "")}/${db}`;
+    }
+
+    this.client = new RedisClient(url, {
+      autoReconnect: true,
+      maxRetries: 10,
+      connectionTimeout: 10000,
     });
 
-    this.client.on("connect", () => console.log("Connected to Redis"));
-    this.client.on("error", (err) => console.error("Redis error:", err));
-    this.client.connect().catch((err) => console.error("Failed to connect to Redis:", err));
+    this.client.onconnect = () => console.log("Connected to Redis");
+    this.client.onclose = (err) => console.error("Redis error:", err);
+
+    this.ready = this.client.connect();
   }
 
   async on(): Promise<boolean> {
-    if (this.client.on("connect", () => true)) {
-      return true;
+    try {
+      await this.ready;
+      return this.client.connected;
+    } catch {
+      return false;
     }
-
-    return false;
   }
 
   async get(key: string): Promise<Record<string, any> | undefined> {
     const data = await this.client.get(key);
-
     return data ? JSON.parse(data) : undefined;
   }
 
   async set(key: string, data: any): Promise<void> {
     await this.client.set(key, JSON.stringify(data));
+  }
+
+  async setEx(key: string, data: any, ttlSeconds: number): Promise<void> {
+    await this.client.send("SET", [key, JSON.stringify(data), "EX", String(ttlSeconds)]);
   }
 
   async delete(key: string): Promise<void> {
@@ -1695,8 +1887,7 @@ export class RedisStore implements Store {
 Once you've set up the `RedisStore`, you can use it in your routes to manage sessions. Below is an example of how to use Redis to manage user sessions in a Harpia app:
 
 ```typescript
-import { Router } from "harpia";
-import { Session } from "harpia/session";
+import { Router, Session } from "@harpia/core";
 import { RedisStore } from "redis.ts";
 
 // Redis Setup

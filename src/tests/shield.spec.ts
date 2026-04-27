@@ -160,9 +160,9 @@ describe("Shield", () => {
   });
 
   test("should apply headers with middleware", () => {
-    const mockApp = { requestIP: mock(() => "192.168.1.1") };
+    const mockGetIp = mock(() => "192.168.1.1");
     const next = mock();
-    const middleware = shield.middleware(mockApp as any);
+    const middleware = shield.middleware(mockGetIp as any);
 
     middleware({} as any, response, next);
 
@@ -361,14 +361,9 @@ describe("Shield", () => {
 
     const mockRes = new Response();
     const next = () => {};
-    const mockApp = {
-      engine: {
-        set: mock(),
-      },
-      requestIP: mock(() => "192.168.1.1"),
-    };
+    const mockGetIp = mock(() => "192.168.1.1");
 
-    const middleware = shield.middleware(mockApp as any);
+    const middleware = shield.middleware(mockGetIp as any);
     middleware({} as any, mockRes, next);
 
     const nonce = shield.getNonce("192.168.1.1");

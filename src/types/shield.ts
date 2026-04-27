@@ -15,4 +15,6 @@ export type SecurityHeaders = {
 	xPoweredBy?: boolean;
 	xXssProtection?: boolean;
 	useNonce?: boolean;
+	trustProxy?: boolean;
+	maxNoncesKeys?: number;
 };

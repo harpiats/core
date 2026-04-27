@@ -7,6 +7,8 @@ import { Request } from "./request";
 import { Response } from "./response";
 import { Router } from "./router";
 import { WebSocket } from "./websocket";
+import { checkNpmVersion } from "./utils/npm-check";
+import { Shield } from "./shield";
 
 import type { Server } from "bun";
 import type { FetchRequest } from "./request";
@@ -16,17 +18,18 @@ import type { Engine } from "./types/engine";
 import type { Handler, HandlerResult } from "./types/handler";
 import type { NotFoundTypes } from "./types/not-found";
 import type { MethodOptions } from "./types/router";
+import type { SecurityHeaders } from "./types/shield";
 import type { ServerOptions } from "./types/server";
 import type { WebSocketHandlers } from "./types/websocket";
 
 export class Application {
-  private static instance: Application | null = null;
   private serverInstance: Server<unknown> | null = null;
   private ipAdress: string | null = null;
 
   private router: Router;
   private middlewares: Middleware;
   private corsInstance: Cors;
+  private shieldInstance: Shield | null = null;
   private notFound: NotFoundTypes = null;
   private staticPath: string | null = null;
   private templateEngine: Engine | null = null;
@@ -42,14 +45,6 @@ export class Application {
     this.middlewares = new Middleware();
     this.corsInstance = new Cors();
     this.websocket = new WebSocket();
-  }
-
-  public static getInstance(): Application {
-    if (!Application.instance) {
-      Application.instance = new Application();
-    }
-
-    return Application.instance;
   }
 
   public listen(options: ServerOptions, handler?: () => void) {
@@ -98,6 +93,11 @@ export class Application {
         tls: options.tls,
         ...commonConfig,
       });
+    }
+
+    if (options.development) {
+      // Non-blocking NPM dependency check
+      checkNpmVersion();
     }
 
     if (handler) {
@@ -151,6 +151,16 @@ export class Application {
     this.corsInstance.options = options || null;
   }
 
+  public shield(options?: SecurityHeaders): void {
+    this.shieldInstance = new Shield(options);
+    this.use(this.shieldInstance.middleware((req) => this.requestIP()));
+  }
+
+  public getNonce(): string | null {
+    if (!this.shieldInstance) return null;
+    return this.shieldInstance.getNonce(this.requestIP() || "unknown");
+  }
+
   public setNotFound(handler: Handler, methods?: MethodOptions[]): void {
     this.notFound = {
       handler,
@@ -199,37 +209,29 @@ export class Application {
       const request = new Request(req, {}, req.url, urlPath, req.method);
 
       if (!this.notFound.methods) {
-        return this.notFound.handler(request, res, () => {});
+        return this.notFound.handler(request, res, () => { });
       }
 
       for (const method of this.notFound.methods) {
         if (method === req.method) {
-          return this.notFound.handler(request, res, () => {});
+          return this.notFound.handler(request, res, () => { });
         }
       }
     }
   }
 
-  private async resolveStaticFiles(urlPath: string, res: Response): Promise<boolean> {
+  private async resolveStaticFiles(urlPath: string): Promise<globalThis.Response | null> {
     if (this.staticPath) {
       const filePath = path.join(this.staticPath, urlPath);
       const file = Bun.file(filePath);
       const fileExists = await file.exists();
 
       if (fileExists) {
-        const fileType = file.type || "application/octet-stream";
-        const fileContent = await file.arrayBuffer();
-
-        res.headers.set("Content-Type", fileType);
-        res.send(new Uint8Array(fileContent));
-
-        return true;
+        return new globalThis.Response(file);
       }
-
-      return false;
     }
 
-    return false;
+    return null;
   }
 
   private async methodOverride(req: FetchRequest): Promise<string> {
@@ -255,7 +257,7 @@ export class Application {
       this.setRequestIP(req, server);
     }
 
-    const response = new Response();
+    const response = new Response(this);
     const url = new URL(req.url);
 
     // Checks if the request is a WebSocket
@@ -266,7 +268,7 @@ export class Application {
     }
 
     if (this.corsInstance.options) {
-      const isCorsAllowed = this.corsInstance.setCors(req, response, () => {});
+      const isCorsAllowed = this.corsInstance.setCors(req, response, () => { });
 
       if (!isCorsAllowed) {
         return response.parse();
@@ -275,18 +277,20 @@ export class Application {
 
     const urlPath = url.pathname;
     const methodOverride = await this.methodOverride(req);
-    const route = this.router.isRouteMatching(urlPath, methodOverride);
-    const staticFileExists = await this.resolveStaticFiles(urlPath, response);
+    const routeMatch = this.router.isRouteMatching(urlPath, methodOverride);
+    const staticFileResponse = await this.resolveStaticFiles(urlPath);
 
-    if (!route) {
-      if (this.staticPath && staticFileExists) {
-        return response.parse();
+    if (!routeMatch) {
+      if (this.staticPath && staticFileResponse) {
+        return staticFileResponse as any;
       }
 
       this.resolveNotFound(req, response, urlPath);
 
       return response.parse();
     }
+
+    const route = routeMatch.route;
 
     if (!route.controller) {
       throw new Error("Controller handler is missing.");
@@ -302,6 +306,11 @@ export class Application {
       if (execution instanceof Response) {
         return execution.parse();
       }
+
+      // Broken chain without Response (e.g., missing next())
+      if (execution === false) {
+        return response.parse();
+      }
     }
 
     // Execute route middlewares
@@ -312,39 +321,64 @@ export class Application {
       if (execution instanceof Response) {
         return execution.parse();
       }
+
+      if (execution === false) {
+        return response.parse();
+      }
     }
 
-    await route.controller(request, response, () => {});
+    await route.controller(request, response, () => { });
 
     return response.parse();
   }
 
-  private async executeHandlers(handlers: Handler[], req: Request, res: Response): Promise<HandlerResult> {
+  private async executeHandlers(
+    handlers: Handler[],
+    req: Request,
+    res: Response,
+  ): Promise<HandlerResult | boolean> {
     let index = -1;
+    let nextCalled = false;
 
-    const next = async (): Promise<HandlerResult> => {
-      index++;
+    // Recursive function to execute handlers
+    const dispatch = async (i: number, error?: unknown): Promise<HandlerResult | boolean> => {
+      if (error) {
+        throw error;
+      }
 
-      if (index < handlers.length) {
-        const handler = handlers[index];
+      if (i <= index) {
+        throw new Error("next() called multiple times");
+      }
+      index = i;
 
-        if (typeof handler !== "function") {
-          throw new Error("Middleware handler must be a function.");
-        }
+      if (i === handlers.length) {
+        return true;
+      }
 
-        const result = await handler(req, res, next);
+      const handler = handlers[i];
 
-        if (result instanceof Response) {
-          return result;
-        }
+      if (typeof handler !== "function") {
+        throw new Error("Middleware handler must be a function.");
+      }
 
-        return next();
+      nextCalled = false;
+      const result = await handler(req, res, async (err?: unknown) => {
+        nextCalled = true;
+        return dispatch(i + 1, err);
+      });
+
+      if (result instanceof Response) {
+        return result;
+      }
+
+      if (!nextCalled) {
+        return false;
       }
 
       return undefined;
     };
 
-    return await next();
+    return dispatch(0);
   }
 
   private setTemplateEngine(engine: Engine): void {
