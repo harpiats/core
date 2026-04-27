@@ -3,7 +3,7 @@ import { join } from "node:path";
 export async function checkNpmVersion(): Promise<void> {
   // Runs the entire check asynchronously, without blocking Bun's Call Stack
   Bun.spawn(["bun", "-e", `
-    const pkgName = "@harpia/core";
+    const pkgName = "@harpiats/core";
     const cacheFile = "${join(process.cwd(), "node_modules", ".harpia_cache")}";
     const pkgFile = "${join(process.cwd(), "package.json")}";
     
@@ -38,7 +38,7 @@ export async function checkNpmVersion(): Promise<void> {
         const latestVersion = data.version;
         
           console.log("\x1b[33m\n[Harpia] A new version of Harpia is available! (" + currentVersion + " -> " + latestVersion + ")\x1b[0m");
-          console.log("\x1b[33mRun 'bun add @harpia/core@latest' to update.\n\x1b[0m");
+          console.log("\x1b[33mRun 'bun add @harpiats/core@latest' to update.\n\x1b[0m");
         }
         
         await Bun.write(cacheFile, new Date().toISOString());

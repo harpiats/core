@@ -1,5 +1,5 @@
 {
-  "name": "@harpia/core",
+  "name": "@harpiats/core",
   "module": "index.ts",
   "type": "module",
   "bin": "./index.ts",
@@ -28,8 +28,8 @@
     "harpia dev",
     "harpiats",
     "harpia framework",
-    "@harpia",
-    "@harpia/core"
+    "@harpiats",
+    "@harpiats/core"
   ],
   "devDependencies": {
     "@biomejs/biome": "2.4.13",

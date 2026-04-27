@@ -5,7 +5,7 @@ Harpia Core is the foundational module of the Harpia Framework, designed exclusi
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-%3E%3D%205.x-blue.svg)](https://www.typescriptlang.org/)
 [![Bun](https://img.shields.io/badge/Bun-%3E%3D%201.2-blue.svg)](https://bun.sh/)
-[![Apache License](https://img.shields.io/badge/License-Apache-green.svg)](https://github.com/@harpia/core/core/blob/main/LICENSE)
+[![Apache License](https://img.shields.io/badge/License-Apache-green.svg)](https://github.com/@harpiats/core/core/blob/main/LICENSE)
 [![Coverage](https://img.shields.io/badge/Coverage-100%25-brightgreen.svg)]()
 
 
@@ -37,7 +37,7 @@ Table of Contents
 ## Installation
 
 ```bash
-  bun add @harpia/core
+  bun add @harpiats/core
 ```
 
 ## Features
@@ -62,7 +62,7 @@ Table of Contents
 
 ### Start the server
 ```typescript
-import harpia from "@harpia/core";
+import harpia from "@harpiats/core";
 
 const app = harpia();
 
@@ -81,7 +81,7 @@ This object defines how the HTTP and WebSocket servers behave, including port, h
 #### Example
 
 ```typescript
-import harpia from "@harpia/core";
+import harpia from "@harpiats/core";
 
 const app = harpia();
 
@@ -140,7 +140,7 @@ The `ws` property defines advanced options for WebSocket behavior and resource l
 Creating a route in a different file.
 
 ```typescript
-import { Router } from "@harpia/core";
+import { Router } from "@harpiats/core";
 
 const books = Router();
 
@@ -152,7 +152,7 @@ export default books;
 Creating a route with a prefix
 
 ```typescript
-import { Router } from "@harpia/core";
+import { Router } from "@harpiats/core";
 
 const books = Router("books");
 
@@ -164,7 +164,7 @@ export default books;
 Creating a websocket route
 
 ```typescript
-import { Router } from "@harpia/core";
+import { Router } from "@harpiats/core";
 
 const routes = Router();
 
@@ -222,7 +222,7 @@ export default routes;
 Import the route into the main application.
 
 ```typescript
-import harpia from "@harpia/core";
+import harpia from "@harpiats/core";
 import books from "./books.routes";
 
 const app = harpia();
@@ -260,7 +260,7 @@ app.use("/panel", (req, res, next) => {
 **Set a middleware to a specific route**
 
 ```typescript
-import { Router } from "@harpia/core";
+import { Router } from "@harpiats/core";
 
 const books = Router();
 
@@ -283,7 +283,7 @@ Each connection creates its own `ServerWebSocket` instance, which can hold **cus
 You can create WebSocket routes using either the **application instance (`app`)** or a **router instance (`Router`)**:
 
 ```typescript
-import { Router } from "@harpia/core";
+import { Router } from "@harpiats/core";
 
 const routes = Router();
 
@@ -293,7 +293,7 @@ routes.ws("/chat", { /** handlers */ });
 or
 
 ```typescript
-import harpia from "@harpia/core";
+import harpia from "@harpiats/core";
 
 const app = harpia();
 
@@ -396,7 +396,7 @@ Create a file for engine configuration:
 // src/ejs.ts
 import ejs from "ejs";
 import path from "node:path";
-import type { Harpia } from "@harpia/core";
+import type { Harpia } from "@harpiats/core";
 
 export const ejsEngine = {
   configure: (app: Harpia) => {
@@ -412,7 +412,7 @@ export const ejsEngine = {
 
 Set up the application to use the engine:
 ```typescript
-import harpia from "@harpia/core";
+import harpia from "@harpiats/core";
 import { ejsEngine } from "./ejs";
 
 const app = harpia();
@@ -446,7 +446,7 @@ To use the harpia template engine, you can follow these steps:
 create a `template-engine.ts` file:
 ```typescript
 import path from "node:path";
-import { TemplateEngine } from "@harpia/core/template-engine";
+import { TemplateEngine } from "@harpiats/core/template-engine";
 
 const baseDir = process.cwd();
 
@@ -465,7 +465,7 @@ export const engine = new TemplateEngine({
 And set up the application to use the engine:
 
 ```typescript
-import harpia from "@harpia/core";
+import harpia from "@harpiats/core";
 import { engine } from "./template-engine";
 
 const app = harpia();
@@ -480,7 +480,7 @@ app.listen...
 
 If you want to use the [Security Header Protection](#security-headers-shield):
 ```typescript
-import harpia from "@harpia/core";
+import harpia from "@harpiats/core";
 import { shield } from "./shield";
 import { engine } from "./template-engine";
 
@@ -503,7 +503,7 @@ app.listen...
 If you would like use a module structure, e.g. `modules/users/pages/home/page.html`, then create a `template-engine.ts` file:
 ```typescript
 import path from "node:path";
-import { TemplateEngine } from "@harpia/core/template-engine";
+import { TemplateEngine } from "@harpiats/core/template-engine";
 
 const baseDir = process.cwd();
 
@@ -522,7 +522,7 @@ export const engine = new TemplateEngine({
 And set up the application to use the engine:
 
 ```typescript
-import harpia from "@harpia/core";
+import harpia from "@harpiats/core";
 import { engine } from "app/config/template-engine";
 
 const app = harpia();
@@ -537,7 +537,7 @@ app.listen...
 
 It is also possible to render a template from its path, regardless of where it is in the application. To do this, we can follow the example:
 ```typescript
-import harpia from "@harpia/core";
+import harpia from "@harpiats/core";
 import { engine } from "app/config/template-engine";
 
 const app = harpia();
@@ -574,7 +574,7 @@ app.listen...
 
 ```typescript
 import path from "node:path";
-import { TemplateEngine } from "@harpia/core/template-engine";
+import { TemplateEngine } from "@harpiats/core/template-engine";
 
 const baseDir = process.cwd();
 
@@ -688,7 +688,7 @@ You can define CORS settings globally for the entire application or specify them
 To set up basic CORS for your application:
 
 ```typescript
-import harpia from "@harpia/core";
+import harpia from "@harpiats/core";
 
 const app = harpia();
 
@@ -706,7 +706,7 @@ app.listen...
 You can also apply different CORS configurations to specific routes or groups of routes.
 
 ```typescript
-import harpia, { Router } from "@harpia/core";
+import harpia, { Router } from "@harpiats/core";
 
 const books = Router();
 
@@ -776,7 +776,7 @@ You can use this to store session information, authentication tokens, or any oth
 To set a cookie, you can use the `res.cookies.set` method. You can specify various options such as expiration date, domain, path, and security settings.
 
 ```typescript
-import harpia, { type CookiesOptions } from "@harpia/core";
+import harpia, { type CookiesOptions } from "@harpiats/core";
 
 const app = harpia();
 
@@ -868,7 +868,7 @@ Harpia includes a `Cache` class that allows you to store and manage cached data 
 To create a new cache instance, simply instantiate the `Cache` class. You can optionally provide a custom `store` (e.g., using a custom memory store or a third-party store like Redis).
 
 ```typescript
-import harpia, { Cache } from "@harpia/core";
+import harpia, { Cache } from "@harpiats/core";
 
 const app = harpia();
 const cache = new Cache();
@@ -879,7 +879,7 @@ const cache = new Cache();
 You can store data in the cache or retrieve it from the cache within route handlers. Here's an example of caching a value in a route and retrieving it from the cache in a different route:
 
 ```typescript
-import harpia, { Cache } from "@harpia/core";
+import harpia, { Cache } from "@harpiats/core";
 
 const app = harpia();
 const cache = new Cache();
@@ -956,7 +956,7 @@ Harpia includes a `Session` class that allows you to manage user sessions. The `
 To use the session management functionality, you first need to create an instance of the `Session` class.
 
 ```typescript
-import harpia, { Session } from "@harpia/core";
+import harpia, { Session } from "@harpiats/core";
 
 const app = harpia();
 const session = new Session();
@@ -1061,8 +1061,8 @@ The `CSRF` class provides a simple and lightweight mechanism for generating and 
 #### Setup
 
 ```ts
-import { CSRF } from "@harpia/core/csrf";
-import { MemoryStore } from "@harpia/core/memory-store";
+import { CSRF } from "@harpiats/core/csrf";
+import { MemoryStore } from "@harpiats/core/memory-store";
 
 const csrf = new CSRF({
   store: new MemoryStore(),
@@ -1155,7 +1155,7 @@ You can set up a middleware to manage single or multiple file uploads, specifyin
 First, create an instance of the Upload module with your desired configuration:
 
 ```typescript
-import { Upload } from "@harpia/core/upload";
+import { Upload } from "@harpiats/core/upload";
 
 export const upload = new Upload({
   fieldName: "file",       // Field name for the file in the request
@@ -1198,7 +1198,7 @@ Each visit is stored as a unified `VisitData` object, keeping path, timestamp, r
 Instantiate the `Telemetry` class and add `handleRequest` as a global middleware:
 
 ```typescript
-import harpia, { Telemetry } from "@harpia/core";
+import harpia, { Telemetry } from "@harpiats/core";
 
 const app = harpia();
 
@@ -1538,8 +1538,8 @@ The Shield module is designed to enhance the security of your application by aut
 Configure your security headers and apply them to the application using the native `app.shield()` method.
 
 ```typescript
-import harpia from "@harpia/core";
-import type { SecurityHeaders } from "@harpia/core";
+import harpia from "@harpiats/core";
+import type { SecurityHeaders } from "@harpiats/core";
 
 const app = harpia();
 
@@ -1561,7 +1561,7 @@ app.listen({ port: 3000 }, () => console.log("Server running on http://localhost
 If you want to use the Harpia template engine, the `generateNonce` plugin is automatically registered when `app.shield()` is initialized:
 
 ```typescript
-import harpia from "@harpia/core";
+import harpia from "@harpiats/core";
 import { engine } from "./template-engine";
 
 const app = harpia();
@@ -1670,7 +1670,7 @@ The **Test Client** is a powerful tool for testing your application's routes. It
 
 ```typescript
 import { expect, test } from "bun:test";
-import { TestClient } from "@harpia/core";
+import { TestClient } from "@harpiats/core";
 import { app } from "start/server";
 
 test("GET /hello returns status 401", async () => {
@@ -1800,8 +1800,8 @@ console.log(await memoryStore.get("session123")); // undefined
 
 **Using with Session Management**
 ```typescript
-import { MemoryStore } from "@harpia/core/memory-store";
-import { SessionManager } from "@harpia/core/session";
+import { MemoryStore } from "@harpiats/core/memory-store";
+import { SessionManager } from "@harpiats/core/session";
 
 const memoryStore = new MemoryStore();
 const sessionManager = new SessionManager({ store: memoryStore });
@@ -1823,7 +1823,7 @@ The Redis Storage provides a persistent key-value store using Redis. It implemen
 
 **Implementation**
 ```typescript
-import type { Store } from "@harpia/core";
+import type { Store } from "@harpiats/core";
 import { RedisClient } from "bun";
 
 export class RedisStore implements Store {
@@ -1887,7 +1887,7 @@ export class RedisStore implements Store {
 Once you've set up the `RedisStore`, you can use it in your routes to manage sessions. Below is an example of how to use Redis to manage user sessions in a Harpia app:
 
 ```typescript
-import { Router, Session } from "@harpia/core";
+import { Router, Session } from "@harpiats/core";
 import { RedisStore } from "redis.ts";
 
 // Redis Setup
